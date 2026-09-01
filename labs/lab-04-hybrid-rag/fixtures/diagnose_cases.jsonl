@@ -1,0 +1,5 @@
+{"id": "dg-1", "query": "公司给员工买商业补充医疗保险吗，保额多少", "answer": "公司为全体员工投保补充医疗，保额 50 万元。", "retriever": "hybrid", "expect": "missing_content", "why": "知识库里根本没有这个主题的文档，补内容是唯一解，不该去调检索参数"}
+{"id": "dg-2", "query": "上次那个对账差异的事件，编号好像是 INC-20777，改进项有哪些", "answer": "该事件的改进项包括补充链路埋点与调整告警阈值。", "retriever": "vector", "expect": "retrieval_failure", "why": "文档存在，但同质文档海里纯向量检索捞不到它——这一类修检索，不修数据也不换模型"}
+{"id": "dg-3", "query": "日常费用报销多久能付款", "answer": "日常费用类单据自财务收单起 30 个工作日内完成付款。", "retriever": "hybrid", "expect": "data_pollution", "why": "检索命中的是已废止的 2023 版文档，内容自洽但已被 d-sem-01 取代"}
+{"id": "dg-4", "query": "没休完的年假第二年还能用吗", "answer": "未使用的年假可以无限期结转，什么时候用都行。", "retriever": "hybrid", "expect": "hallucination", "why": "检索命中且内容正确（最多结转至次年一季度末），是模型没有忠实转述"}
+{"id": "dg-5", "query": "辞职之前要交接哪些东西", "answer": "需完成文档权限回收、客户资源划转与在途合同交接，并经接收人与主管签字确认。", "retriever": "hybrid", "expect": "answer_actually_correct", "why": "三步全部正常，这条本就不该被判为错误回答——用来检验诊断不会乱报"}

@@ -1,0 +1,5 @@
+qdrant-client>=1.19
+sentence-transformers
+rank-bm25
+jieba
+numpy

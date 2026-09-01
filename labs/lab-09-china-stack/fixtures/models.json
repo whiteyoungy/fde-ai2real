@@ -1,0 +1,80 @@
+{
+  "_note": "候选模型清单。许可证一栏是本 Lab 的核心陷阱：Qwen2.5 系列并非全系 Apache 2.0，3B 那一档用的是 Qwen RESEARCH LICENSE，仅限研究与评估、不可商用。档位相邻不代表授权条款相邻——这是第 23 章列为「最需要记住的一条硬约束」的那一条。所有显存数字都标了来源口径，估算值只含权重、不含 KV Cache。",
+  "_source_note": "许可证与规格以各模型官方仓库的 LICENSE 文件与 config.json 为准；本文件是 Lab 演练用的快照，正式选型前必须重新核对官方页面。",
+  "models": [
+    {
+      "id": "qwen2.5-3b-instruct",
+      "name": "Qwen2.5-3B-Instruct",
+      "license": "Qwen RESEARCH LICENSE AGREEMENT",
+      "commercial_use": false,
+      "vram_gb": {
+        "value": 6,
+        "basis": "估算",
+        "note": "BF16 权重约 6GB，未含 KV Cache"
+      },
+      "context": 32768,
+      "function_calling": true,
+      "chinese": "强",
+      "trap": "参数量小、显存友好、看起来最适合资源受限现场——但商用授权这一关直接出局"
+    },
+    {
+      "id": "qwen2.5-7b-instruct",
+      "name": "Qwen2.5-7B-Instruct",
+      "license": "Apache-2.0",
+      "commercial_use": true,
+      "vram_gb": {
+        "value": 14,
+        "basis": "估算",
+        "note": "BF16 权重约 14GB，未含 KV Cache"
+      },
+      "context": 32768,
+      "function_calling": true,
+      "chinese": "强"
+    },
+    {
+      "id": "qwen2.5-72b-instruct",
+      "name": "Qwen2.5-72B-Instruct",
+      "license": "Qwen License（允许商用，附条件）",
+      "commercial_use": true,
+      "vram_gb": {
+        "value": 145,
+        "basis": "估算",
+        "note": "BF16 权重约 145GB，需多卡"
+      },
+      "context": 32768,
+      "function_calling": true,
+      "chinese": "强"
+    },
+    {
+      "id": "deepseek-v3",
+      "name": "DeepSeek-V3（开源权重）",
+      "license": "DeepSeek License（允许商用）",
+      "commercial_use": true,
+      "vram_gb": {
+        "value": 700,
+        "basis": "估算",
+        "note": "MoE 全量权重，单机不可行"
+      },
+      "context": 131072,
+      "function_calling": true,
+      "chinese": "强",
+      "note": "开源权重版自初版发布起就是 128K 上下文；容易混淆的「V3.1 起翻倍到 128K」说的是在线聊天产品，与开源模型规格是两回事"
+    },
+    {
+      "id": "qwen2.5-0.5b",
+      "name": "Qwen2.5-0.5B",
+      "license": "Apache-2.0",
+      "commercial_use": true,
+      "vram_gb": {
+        "value": 1,
+        "basis": "估算",
+        "note": "本 Lab 的 CPU 实测档，纯 CPU 亦可运行"
+      },
+      "context": 32768,
+      "function_calling": false,
+      "chinese": "一般",
+      "note": "能力有限，只用于验证部署链路是否跑通，不用于验证效果"
+    }
+  ],
+  "_context_note": "context 一律取各模型 config.json 的默认值口径。第 23.1 节表格里 Qwen2.5 系上下文一栏把「官方声明 128K（YaRN 扩展）」写在前面、config.json 默认 32768 写在后面，两个数字指的是不同的东西：128K 需要显式开启 YaRN 扩展并另行验证稳定性，不属于开箱可用能力。本 Lab 按开箱口径取值——这直接决定了 s3 的可行集是不是空的，若按 131072 填 Qwen2.5，s3 就会选出 7B，整个场景的教学意图就没了。"
+}

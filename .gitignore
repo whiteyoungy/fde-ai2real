@@ -1,0 +1,23 @@
+build/*.pdf
+build/.tmp/
+assets/mermaid/
+slides/.figcache/
+__pycache__/
+.venv/
+*.pyc
+.env
+.superpowers/
+.claude/settings.local.json
+labs/*/results/
+labs/*/submission/
+labs/*/fixtures/certs/
+labs/*/tools/
+labs/*/fixtures/pdfs/
+*.pptx
+
+# 外部审读稿的整仓快照（比对完即可删，不入库）
+FDE-*/
+# 外部资料原件（竞品白皮书、调研报告等），只做参考不入库
+*.pdf
+# 朋友圈转发图：slides/poster.py 生成，和 pptx 同样不入库
+slides/*.png

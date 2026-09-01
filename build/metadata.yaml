@@ -1,0 +1,69 @@
+title: "前线部署工程师（FDE）：把 AI 交付到真实世界"
+subtitle: "从技术栈到客户现场的完整落地打法"
+author: "whiteyoungy"
+date: "2026"
+lang: zh-CN
+documentclass: book
+classoption:
+  - oneside
+geometry:
+  - a4paper
+  - margin=2.5cm
+fontsize: 11pt
+CJKmainfont: "Noto Serif CJK SC"
+CJKsansfont: "Noto Sans CJK SC"
+CJKmonofont: "Noto Sans Mono CJK SC"
+toc: true
+toc-depth: 3
+numbersections: false   # 正文标题里已手写「第 N 章」「0.4」这类编号，
+                        # 再开自动编号会变成「第 1 章. 第 0 章·导读」「1.5  0.4 全书结构导航」这种双份
+colorlinks: true
+
+# 符号字体回退。正文字体（Latin Modern / Noto CJK）不含数学与杂项符号，
+# 缺字时 xelatex 只发 warning 不报错，字符会静默消失在 PDF 里——
+# ⚠ 尤其致命，它是全书合成案例的警示标记。
+# DejaVu Sans 覆盖以下全部字形，已实测。
+# 符号渲染。xelatex 默认只把 CJK 区段交给中文字体，≥ ⚠ ① → 这类符号
+# 落在拉丁字体（Latin Modern）上，而它没有这些字形——xelatex 只发 warning
+# 不报错，字符会静默消失在 PDF 里。⚠ 尤其致命，它是全书合成案例的警示标记。
+#
+# 解法：用 xeCJK 把这些区段一并路由到 Noto Serif CJK（实测覆盖除 ✗ 外的全部）。
+# 不用 \newunicodechar 做字符级映射——那会和 microtype 冲突
+# （Argument of \MT@is@char has an extra }）。
+#
+# 注意 header-includes 的内容会先过一遍 pandoc 的 Markdown 解析器，
+# 必须用 ```{=latex} raw 块包住，否则 [] 会被当成链接语法吃掉。
+header-includes:
+  - |
+    ```{=latex}
+    \input{build/cover.tex}
+    % ── 排版溢出修复（Task 51）─────────────────────────────
+    % 实测 35 处 Overfull hbox，15 处 >20pt，最严重 336pt。
+    % 三类成因各自对应下面一项，改完重新量过。
+    %
+    % 1. 百分号编码的长 URL 整串无断点（那个 336pt 就是它）。
+    %    模板只带了 url 包的 hyphens 选项，只能在连字符处断，
+    %    对 %E5%B9%B4 这种编码串无能为力。xurl 允许任意位置断行。
+    \usepackage{xurl}
+    % 2. 代码块长行不折行。pandoc 的 Highlighting 环境默认不 wrap，
+    %    超出版心就直接印到页外去了。fvextra 补上 breaklines。
+    \usepackage{fvextra}
+    \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,breakanywhere,commandchars=\\\{\}}
+    % 3. 行内代码用 / 串联时整串不可断（如 --platform/--python-version/--implementation）。
+    %    允许 \texttt 内部断词。
+    \usepackage[htt]{hyphenat}
+    % 4. 给段落一点弹性余量，消化剩下的零星溢出。
+    \emergencystretch=3em
+    \xeCJKDeclareCharClass{CJK}{
+      "00D7,                 % ×
+      "0370 -> "03FF,        % 希腊字母 α β γ σ μ
+      "2010 -> "206F,        % 通用标点，含 •
+      "2190 -> "21FF,        % 箭头 → ← ↑ ↓
+      "2200 -> "22FF,        % 数学运算符 ≥ ≤ ≈ ≠ ∈
+      "2460 -> "24FF,        % 带圈数字 ①②③
+      "2500 -> "257F,        % 制表符
+      "25A0 -> "25FF,        % 几何图形
+      "2600 -> "26FF,        % 杂项符号，含 ⚠ ★
+      "2700 -> "27BF         % 装饰符号 ✓
+    }
+    ```

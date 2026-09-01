@@ -1,0 +1,104 @@
+[
+  {
+    "file": "inv-01-baseline.pdf",
+    "outcome": "pass",
+    "expect": {
+      "invoice_no": "INV-2026-000101",
+      "invoice_date": "2026-03-05",
+      "amount_excl_tax": 12500.0,
+      "tax_amount": 1625.0,
+      "total": 14125.0
+    },
+    "dirt": "无。基线用例，用来确认管道本身通路正常。"
+  },
+  {
+    "file": "inv-02-field-order.pdf",
+    "outcome": "pass",
+    "expect": {
+      "invoice_no": "INV-2026-000102",
+      "invoice_date": "2026-03-11",
+      "amount_excl_tax": 7816.0,
+      "tax_amount": 1016.0,
+      "total": 8832.0
+    },
+    "dirt": "字段顺序与基线完全不同；日期用 2026/03/11 斜杠格式；金额带千分位逗号。"
+  },
+  {
+    "file": "inv-03-table-layout.pdf",
+    "outcome": "pass",
+    "expect": {
+      "invoice_no": "INV-2026-000103",
+      "invoice_date": "2026-03-18",
+      "amount_excl_tax": 6200.0,
+      "tax_amount": 806.0,
+      "total": 7006.0
+    },
+    "dirt": "表格版式，字段靠 x 坐标分列。纯按行取文本会把表头和数据混在一行。"
+  },
+  {
+    "file": "inv-04-wrapped-field.pdf",
+    "outcome": "pass",
+    "expect": {
+      "invoice_no": "INV-2026-000104",
+      "invoice_date": "2026-03-23",
+      "amount_excl_tax": 15600.0,
+      "tax_amount": 2028.0,
+      "total": 17628.0
+    },
+    "dirt": "发票号码与日期都被换行截断。中文日期格式「2026 年 03 月 23 日」跨两行。"
+  },
+  {
+    "file": "inv-05-fullwidth.pdf",
+    "outcome": "pass",
+    "expect": {
+      "invoice_no": "INV-2026-000105",
+      "invoice_date": "2026-04-02",
+      "amount_excl_tax": 9800.0,
+      "tax_amount": 1274.0,
+      "total": 11074.0
+    },
+    "dirt": "全角数字与全角标点。不做 NFKC 归一化会解析成乱码或抽不到数字。"
+  },
+  {
+    "file": "inv-06-missing-optional.pdf",
+    "outcome": "pass",
+    "expect": {
+      "invoice_no": "INV-2026-000106",
+      "invoice_date": "2026-04-15",
+      "amount_excl_tax": 3000.0,
+      "tax_amount": 0.0,
+      "total": 3000.0
+    },
+    "dirt": "无税额栏、无纳税人识别号；多出经办人/审核人等无关字段。校验层要能接受 tax_amount=0 且不被无关字段带偏。"
+  },
+  {
+    "file": "inv-07-credit-note.pdf",
+    "outcome": "pass",
+    "expect": {
+      "invoice_no": "INV-2026-000107",
+      "invoice_date": "2026-04-28",
+      "amount_excl_tax": -12500.0,
+      "tax_amount": -1625.0,
+      "total": -14125.0
+    },
+    "dirt": "红字发票金额为负。若校验层写死 amount > 0 会误判为脏数据。"
+  },
+  {
+    "file": "bad-08-truncated.pdf",
+    "outcome": "quarantine",
+    "reason": "文件被截断，PDF 结构不完整，解析器应抛异常而非返回半份数据",
+    "dirt": "传输中断/磁盘写坏的典型形态。"
+  },
+  {
+    "file": "bad-09-scanned-no-text.pdf",
+    "outcome": "quarantine",
+    "reason": "无文本层（扫描件），文本抽取返回空，不应交给模型硬猜",
+    "dirt": "纯图像发票。没有 OCR 环节时必须识别出「抽不到文本」并隔离，而不是把空字符串喂给模型让它编。"
+  },
+  {
+    "file": "bad-10-missing-critical.pdf",
+    "outcome": "quarantine",
+    "reason": "缺发票号码与金额，日期不完整；强类型校验必须失败且自纠错也补不出来",
+    "dirt": "多联发票只扫了一联。模型很容易在这里编一个号码和金额出来——这正是本 Lab 要防的：校验层挡住，自纠错若干轮后仍失败则进隔离队列。"
+  }
+]

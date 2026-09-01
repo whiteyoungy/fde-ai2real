@@ -1,0 +1,81 @@
+% 插图预览工装。只在本机看版式用，不进任何一册的构建。
+% 用法：xelatex -output-directory=build/.tmp build/preview_figures.tex
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{xeCJK}
+\setCJKmainfont{Noto Serif CJK SC}
+\setCJKsansfont{Noto Sans CJK SC}
+\setCJKmonofont{Noto Sans Mono CJK SC}
+\usepackage{tikz}
+\usepackage{xcolor}
+\xeCJKDeclareCharClass{CJK}{
+  "00D7, "0370 -> "03FF, "2010 -> "206F, "2190 -> "21FF,
+  "2200 -> "22FF, "2460 -> "24FF, "2500 -> "257F,
+  "25A0 -> "25FF, "2600 -> "26FF, "2700 -> "27BF
+}
+\input{build/figures.tex}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\begin{document}
+\newcommand{\pv}[2]{\textbf{#1}\par\fdfig{#2}\clearpage}
+\pv{图 1 · 上册四部结构}{\fdbookmapone}
+\pv{图 2 · 六道关卡与四条回流}{\fdgatesrail}
+\pv{图 3 · 国企与银行采购到上线}{\fdprocurement}
+\pv{图 4 · 数据出境合规路径判定}{\fdcrossborder}
+\pv{图 5 · 下册六部结构}{\fdbookmaptwo}
+\pv{图 6 · 连不上的分层排查}{\fdconnladder}
+\pv{图 7 · 一条错误回答的三分法}{\fdragtriage}
+\pv{图 8 · 四种编排拓扑}{\fdtopologies}
+\pv{图 9 · 离线部署包的两段}{\fdofflinepack}
+\pv{图 10 · 三级缓存级联}{\fdcachetiers}
+\pv{图 11 · 私有化模型选型五问}{\fdmodelpick}
+\pv{图 12 · 信创现场的三条路径}{\fdxinchuang}
+\pv{图 13 · 三个智能体与一条人工回路}{\fdmcpagents}
+\pv{图 14 · 12 个 Lab 的依赖关系}{\fdlabgraph}
+\pv{图 15 · 四层骨架}{\fdskeleton}
+\pv{图 16 · 可行性三角}{\fdtriangle}
+\pv{图 17 · 最小可执行业务模型的七要素}{\fdontology}
+\pv{图 18 · 三层评估集}{\fdevalsets}
+\pv{图 19 · 撤得回来的和撤不回来的}{\fdrollback}
+\pv{图 20 · 计价方式就是责任分配}{\fdpricing}
+\pv{图 21 · 沉淀的边界}{\fdcarryover}
+\pv{图 22 · 三类漂移}{\fddrift}
+\pv{图 23 · 上下文预算}{\fdctxbudget}
+\pv{图 24 · 四家公司，四种答案}{\fdfourcos}
+\pv{图 25 · 失速集中在三个位置}{\fdstall}
+\pv{图 26 · 四个陷阱与证据强度}{\fdtraps}
+\pv{图 27 · 七种需求错位与识别工具}{\fdmismatch}
+\pv{图 28 · 三类条款怎么写才守得住}{\fdclauses}
+\pv{图 29 · 竖着切，不是横着切}{\fdslice}
+\pv{图 30 · 技术债四象限}{\fdtechdebt}
+\pv{图 31 · 一条验收指标的解剖}{\fdacceptline}
+\pv{图 32 · 坍塌漏斗与影子 AI}{\fdadoptfunnel}
+\pv{图 33 · 两个最容易被算错的指标}{\fdoverride}
+\pv{图 34 · 四段式翻译}{\fdtranslate}
+\pv{图 35 · 三种政府采购方式}{\fdprocure}
+\pv{图 36 · 三部法落在系统的哪一层}{\fdthreelaws}
+\pv{图 37 · 案例·涉密制造现场}{\fdcaseonefive}
+\pv{图 38 · 案例·物流结算摄取与对账}{\fdcaseonesix}
+\pv{图 39 · 案例·MCP 盘活遗留系统}{\fdcasemcp}
+\pv{图 40 · 案例·工业质检}{\fdcaseqc}
+\pv{图 41 · 案例·智慧矿山}{\fdcasemine}
+\pv{图 42 · 案例·高并发 RAG 性能手术}{\fdcaserag}
+\pv{图 43 · 底座与现场层的边界}{\fdbaseline}
+\pv{图 44 · 三套工具解决的不是同一个问题}{\fdspectools}
+\pv{图 45 · 遗留系统对接的四种方式}{\fdlegacy}
+\pv{图 46 · 分块策略要反过来选}{\fdchunking}
+\pv{图 47 · 系统级 Prompt 的四层}{\fdpromptlayers}
+\pv{图 48 · 微调 vs RAG vs Prompt}{\fdfinetune}
+\pv{图 49 · 显存是「预留」不是「上限」}{\fdgpumem}
+\pv{图 50 · 检索指标与生成指标}{\fdragmetrics}
+\pv{图 51 · 三类裁判偏差的实测差距}{\fdjudgebias}
+\pv{图 52 · 信创的三层压力与证据成色}{\fdxinchuangstack}
+\pv{图 53 · 13 周时间线}{\fdplan}
+\pv{比喻 1 · 西部片里的小镇布景}{\fdmetafacade}
+\pv{比喻 2 · 那条踩出来的小路}{\fdmetapath}
+\pv{比喻 3 · 错位的那一颗扣子}{\fdmetabutton}
+\pv{比喻 4 · 救火的人和装防火门的人}{\fdmetahero}
+\pv{比喻 5 · 试镜与正式演出}{\fdmetastage}
+\pv{比喻 6 · 那句玩笑}{\fdmetabus}
+\pv{比喻 7 · 搬家之后留下的那一样}{\fdmetamove}
+\end{document}

@@ -1,0 +1,6 @@
+# 基线系统配置：护栏开启，检索无噪声，无历史故障复发。
+variant: baseline
+guardrail_enabled: true
+retrieval_noise_case_ids: []
+regression_bugs_reintroduced: []
+retrieval_top_k: 2

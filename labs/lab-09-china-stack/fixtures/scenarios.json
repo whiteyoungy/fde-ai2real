@@ -1,0 +1,33 @@
+{
+  "_note": "客户约束场景。第 23 章的五步判据是：商用授权 → 显存预算 → 上下文需求 → 函数调用 → 中文能力。expect 为 null 表示可行集应当为空——此时正确做法是回去和客户谈判放松某个维度，不是硬凑一个方案上线。",
+  "scenarios": [
+    {
+      "id": "s1",
+      "desc": "银行内网，单卡 A100 40G，需函数调用，合同问答 32K 够用，必须可商用",
+      "constraints": {"commercial_use": true, "vram_gb_max": 40, "context_min": 32768, "function_calling": true, "chinese_min": "强"},
+      "expect": "qwen2.5-7b-instruct",
+      "why": "3B 显存最省但商用授权出局；72B 与 V3 显存超预算；7B 是唯一可行解"
+    },
+    {
+      "id": "s2",
+      "desc": "同上，但客户明确说「只做内部研究评估，不上生产」",
+      "constraints": {"commercial_use": false, "vram_gb_max": 40, "context_min": 32768, "function_calling": true, "chinese_min": "强"},
+      "expect": "qwen2.5-3b-instruct",
+      "why": "研究用途下 3B 可用且显存最省。同一份清单，仅商用与否一个条件不同，答案就换了一档——这正是许可证要单独作为第一步判据的原因"
+    },
+    {
+      "id": "s3",
+      "desc": "政务长文档，需 128K 上下文，单卡 80G，必须可商用",
+      "constraints": {"commercial_use": true, "vram_gb_max": 80, "context_min": 131072, "function_calling": true, "chinese_min": "强"},
+      "expect": null,
+      "why": "满足 128K 的只有 DeepSeek-V3，但它单机放不下。可行集为空——应回去谈判：要么降上下文要求走分块检索，要么加硬件预算，不是硬凑"
+    },
+    {
+      "id": "s4",
+      "desc": "纯 CPU 演示环境，只要能跑通链路，不要求效果，可商用",
+      "constraints": {"commercial_use": true, "vram_gb_max": 2, "context_min": 4096, "function_calling": false, "chinese_min": "一般"},
+      "expect": "qwen2.5-0.5b",
+      "why": "本 Lab 的 CPU 实测档"
+    }
+  ]
+}

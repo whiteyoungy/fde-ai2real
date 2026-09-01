@@ -1,0 +1,3639 @@
+% ─────────────────────────────────────────────────────────────
+% 正文插图库。TikZ 直绘，视觉沿用 build/panorama.tex 与 build/cover.tex。
+%
+% 为什么不用 Mermaid：
+%   Mermaid 的判定节点是菱形。中文标签进菱形之后，为了容下四五个字，
+%   菱形要撑到很大，整张图被迫纵向拉长——「模型选型五问」那张实测
+%   宽高比 1:2.2，压进 16cm 版心后字号只剩 5pt，印出来看不清。
+%   而且它一套淡紫色打天下：「一票否决」和「附加约束，不阻断」长得
+%   一模一样，图里最该传达的那层语义反而丢了。
+%
+%   这里换成「判定阶梯」：问题排成一条竖脊，岔出去的结果甩到右边一列，
+%   用底色区分岔路的性质（红＝一票否决，琥珀＝返工重来，青＝继续但带约束）。
+%   同样的信息，高度掉到三分之一，语义还多了一层。
+%
+% ⚠ 五条踩过的坑，改图时别再犯：
+%   1. 不要把样式命名为 name —— 它是 TikZ 保留键（来自 panorama.tex）。
+%   2. 不要旋转中文标签 —— xeCJK 不会正确旋转 CJK 字形（来自 panorama.tex）。
+%   3. 不要用 ✗（U+2717）—— Noto Serif CJK 不含此字形，xelatex 只发
+%      warning，字符会静默消失。要打叉用 ×（U+00D7）。
+%   4. \foreach 的循环变量不要取 \dp \pt \path \note \cap 这类名字。
+%      \dp 是 TeX 原语（取盒子深度），\path 和 cap 是 TikZ 的键，
+%      撞上之后报的是「Missing number」，跟真正的错处差着十万八千里。
+%      同类还有：\W \H 别用来 \def 尺寸（\H 是 LaTeX 的重音命令）。
+%   5. 节点里的换行 \\ 必须留在节点文本的顶层，不能嵌进 {\scriptsize ...} 这种组里。
+%      嵌进去会把 TikZ 的路径栈弄坏，报的是 \tikzscope@linewidth undefined ——
+%      错误信息里完全看不出跟换行有关系。要分行分字号就每行各写一次字号：
+%      {{\bfseries 标题}\\{\scriptsize 第一行}\\{\scriptsize 第二行}}
+%
+% ⚠ 一条版式规矩：整框宽度用 minimum width，不用 text width。
+%   text width 会把节点变成定宽段落盒，中文行内的可伸缩胶被拉开，
+%   「业务口提出需求」渲染成「业 务 口 提 出 需 求」。
+%   只有确实要自动折行的多行文本（结果框、注释）才用 text width，
+%   而且必须同时写 align=left —— 居中加定宽就会犯上面这个毛病。
+% ─────────────────────────────────────────────────────────────
+\usepackage{adjustbox}
+\usetikzlibrary{calc,positioning,arrows.meta,backgrounds,fit,shapes.geometric}
+\usetikzlibrary{decorations.pathreplacing}
+
+% ── 调色板 ───────────────────────────────────────────────────
+% 与 panorama.tex 同源；fdwarn/fdstop 取自课件 slides/deck_kit.py，
+% 让书和课件用同一套颜色语义。
+\definecolor{fdink}{HTML}{121A26}    % 主文字
+\definecolor{fdacc}{HTML}{0E8C7B}    % 主色·青绿
+\definecolor{fdmute}{HTML}{6B7A8F}   % 次级文字
+\definecolor{fdline}{HTML}{C7D0DB}   % 线
+\definecolor{fdwarn}{HTML}{B26E10}   % 返工·需要处理
+\definecolor{fdstop}{HTML}{A83A32}   % 一票否决·终止
+\definecolor{fdtint}{HTML}{DCEFEA}   % 青底·正向结果
+\definecolor{fdamber}{HTML}{FBE7D2}  % 琥珀底·返工分支
+\definecolor{fdlilac}{HTML}{E4E1F5}  % 紫底·外部系统
+\definecolor{fdrose}{HTML}{F6DEDC}   % 红底·否决分支
+\definecolor{fdpale}{HTML}{F2F5F7}   % 灰底·中性
+\definecolor{fdmilk}{HTML}{F7FAF9}   % 极浅青·分组底
+
+% ── 通用样式 ─────────────────────────────────────────────────
+\tikzset{
+  fdcard/.style   = {rounded corners=2.6pt, draw=fdline, line width=0.7pt, fill=white,
+                     inner sep=4pt, align=center, font=\footnotesize, text=fdink},
+  fdask/.style    = {rounded corners=2.6pt, draw=fdacc, line width=0.9pt, fill=white,
+                     inner sep=5pt, align=left, font=\footnotesize, text=fdink},
+  fdout/.style    = {rounded corners=2.6pt, draw=none, fill=fdpale,
+                     inner sep=4.5pt, align=left, font=\scriptsize, text=fdink},
+  fdnum/.style    = {circle, draw=fdacc, line width=0.8pt, fill=white, minimum size=5.6mm,
+                     inner sep=0pt, font=\bfseries\scriptsize, text=fdacc},
+  fdedge/.style   = {draw=fdline, line width=0.9pt, -{Stealth[length=3.4pt]}},
+  fdedgea/.style  = {draw=fdacc, line width=0.9pt, -{Stealth[length=3.4pt]}},
+  fddep/.style    = {draw=fdmute, line width=0.7pt, dash pattern=on 1.4pt off 1.6pt,
+                     -{Stealth[length=3.4pt]}},
+  fdthin/.style   = {draw=fdline, line width=0.5pt},
+  fdlab/.style    = {font=\scriptsize, text=fdmute, inner sep=1.6pt, fill=white},
+  fdlaba/.style   = {font=\bfseries\scriptsize, text=fdacc, inner sep=1.6pt, fill=white},
+  fdcav/.style    = {font=\scriptsize, text=fdmute, align=left},
+  fdgutter/.style = {font=\scriptsize, text=fdmute, anchor=east},
+}
+
+% 岔路的第一行：把「哪个答案岔出去」写进结果框里，不写在箭头上。
+% 写在箭头上的话，「个人信息≥100万人 或 敏感信息≥1万人」这种长条件
+% 要么把箭头撑得老长，要么折行压住线。
+\newcommand{\fdbranch}[2]{{\bfseries\color{#1}#2}\\[1.5pt]}
+
+% 从横幅进入第一个节点的竖箭头。横幅比节点宽，两者中心不在一条线上，
+% 直接 (bar.south) -- (node.north) 会画成一条斜线。-| 把横幅底边投影到
+% 节点的中轴上再落下来。
+\newcommand{\fddrop}[2]{\draw[fdedgea] (#1.south -| #2.north) -- (#2.north);}
+
+% 插图外壳。用 center 而不是 figure 浮动体——原来的 Mermaid 是行内图片，
+% 位置固定；换成浮动体会让图跑到几页之外，读者对不上正文。
+\newcommand{\fdfig}[1]{%
+  \par\vspace{1.0em}\noindent
+  \begin{center}%
+  \adjustbox{max width=\linewidth, max totalheight=0.88\textheight}{#1}%
+  \end{center}%
+  \vspace{0.7em}\par}
+
+% ═══════════════════════════════════════════════════════════════
+% 题词页 · 上下册首页金句（放在导读之前，独占一页）
+% ═══════════════════════════════════════════════════════════════
+% 版式取古典题词页：上下双细线收口，正中一句大字，下面一段小字解释，
+% 末行右对齐给出处。
+%
+% 不用底色、不用色块——**题词页一上颜色就变成广告**。唯一的彩色是
+% 中缝那个菱形和一条短线，和封面同一个记号。
+%
+% ⚠ 菱形用 ◆（U+25C6），落在 "25A0 -> "25FF 区段里，已在 metadata 的
+%   \xeCJKDeclareCharClass 里路由给 Noto Serif CJK。别换成 ✦ 一类，
+%   那些字形该字体没有，xelatex 只发 warning，字符会静默消失。
+%
+% 图内用「」而不是“”——这是插图标签的惯例，与正文相反，全书插图一致。
+%
+% #1 眉标  #2 金句（\\ 分行）  #3 解释  #4 出处  #5 金句多出来的高度（cm，单行给 0）
+%
+% #5 存在的原因：一句话的金句和三句话的金句，如果共用同一套固定坐标，
+% 单行那版金句和菱形之间会空出一大块。整版跟着金句行数一起长，才不松。
+\newcommand{\fdmaximplate}[5]{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \path (0,0) rectangle (14.2,{-7.4-#5});
+  % 上收口：一细一粗，粗线在下
+  \draw[fdthin] (1.10,-0.05) -- (13.10,-0.05);
+  \draw[draw=fdink, line width=1.0pt] (1.10,-0.19) -- (13.10,-0.19);
+  \node[font=\scriptsize, text=fdmute, anchor=north] at (7.10,-0.52) {#1};
+
+  \node[font=\LARGE\bfseries, text=fdink, align=center] at (7.10,{-1.80-0.5*#5}) {#2};
+
+  \begin{scope}[yshift={-#5*1cm}]
+    % 中缝记号
+    \draw[fdthin] (5.30,-3.10) -- (6.72,-3.10);
+    \node[font=\scriptsize, text=fdacc] at (7.10,-3.07) {◆};
+    \draw[fdthin] (7.48,-3.10) -- (8.90,-3.10);
+
+    \node[font=\small, text=fdink, align=left, text width=11.2cm, anchor=north]
+      at (7.10,-3.55) {#3};
+
+    % 下收口 + 出处
+    \draw[draw=fdink, line width=1.0pt] (1.10,-6.55) -- (13.10,-6.55);
+    \draw[fdthin] (1.10,-6.69) -- (13.10,-6.69);
+    \node[font=\scriptsize, text=fdmute, anchor=north east] at (13.10,-6.95) {#4};
+  \end{scope}
+\end{tikzpicture}}
+
+% 上册题词：全书总纲。三类交付结果，各自对着一个会说「不行」的人。
+\newcommand{\fdmaximvolone}{\fdmaximplate{上册 · 方法与决策 · 总纲}{%
+没有证据，业务不该信；\\[2pt]
+没有控制，安全部门不该放；\\[2pt]
+客户不能接管，FDE 不该走。}{%
+一次交付必须留下三样东西：{\bfseries 证据、控制、接管}。它们不是三种文档，
+是三个会说「不行」的人——业务不认的叫证据不足，安全部门不放的叫控制缺位，
+没人接得住的叫无法接管。\\[3pt]
+这三句同时是「项目到底完成没有」比上线日期更硬的判据。
+{\bfseries 上线日期是日历上的一个点，这三条是三个人的签字。}}{%
+本书 §2.0 四层骨架　·　§14.4 上册收尾}{1.55}}
+
+% 下册题词：换一遍技术栈之后还剩什么，是这一册的全部主张。
+\newcommand{\fdmaximvoltwo}{\fdmaximplate{下册 · 工程与系统 · 总纲}{%
+模型是耗材，验收集才是资产。}{%
+芯片、操作系统、数据库、模型全换一遍之后——{\bfseries 信创改造经常就是这么换的}——
+你手上还剩什么不用重建？剩下的那部分，才是这次交付真正留下的资产。\\[3pt]
+黄金集、对抗集、回归集，把「什么算对、什么必须拒答、边界在哪」编码成可计算的东西。
+{\bfseries 在非确定性系统里，验收集就是需求规格本身}——文档和验收集打架的时候，
+你信的是后者。}{%
+本书 §9.0　·　判据定义见上册 §8.2　·　最狠的检验在 §11}{0}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 1 · 上册四部结构（第 0 章导读）
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdbookmapone}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \foreach \i/\x/\prt/\nm/\ch in {%
+    1/0.00/第一部/{认清\\这件事}/{第 1--3 章},
+    2/3.85/第二部/{六道\\关卡}/{第 4--10 章},
+    3/7.70/第三部/{中国\\现场}/{第 11--13 章},
+    4/11.55/第四部/{从一次成功\\到一套能力}/{第 14--16 章}%
+  }{
+    \fill[fdmilk, rounded corners=3pt] (\x,0) rectangle (\x+3.3,2.55);
+    \draw[fdacc, line width=2pt] (\x,2.55) -- (\x+3.3,2.55);
+    \node[font=\bfseries\scriptsize, text=fdacc, anchor=north west] at (\x+0.28,2.32) {\prt};
+    \node[font=\bfseries\small, text=fdink, anchor=north, align=center]
+      at (\x+1.65,1.82) {\nm};
+    \node[font=\scriptsize, text=fdmute, anchor=south] at (\x+1.65,0.2) {\ch};
+  }
+  \foreach \x in {3.42,7.27,11.12}{
+    \draw[fdedgea] (\x,1.28) -- (\x+0.32,1.28);
+  }
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 2 · 六道关卡与四条回流（第 2 章）
+% 正文说的是「四条回流边」，第四条（第 4 关 → 产品与研发）流出项目边界，
+% 也正是正文强调「最容易漏掉」的那一条。所以四条一律编号，
+% 图上数得出四条，才对得上正文那句话。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdgatesrail}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \foreach \i/\x/\nm in {1/0.00/选题, 2/2.53/定界, 3/5.06/切片,
+                         4/7.59/验收, 5/10.12/上线, 6/12.65/采用}{
+    \fill[white, rounded corners=3pt, draw=fdacc, line width=0.9pt]
+      (\x,0) rectangle (\x+2.15,1.55);
+    \node[font=\scriptsize, text=fdmute, anchor=north] at (\x+1.075,1.42) {第 \i\ 关};
+    \node[font=\bfseries\normalsize, text=fdink, anchor=south] at (\x+1.075,0.24) {\nm};
+    \coordinate (g\i) at (\x+1.075,0);
+    \coordinate (g\i t) at (\x+1.075,1.55);
+  }
+  \foreach \x in {2.15,4.68,7.21,9.74,12.27}{
+    \draw[fdedgea] (\x+0.06,0.78) -- (\x+0.32,0.78);
+  }
+
+  % 第 ④ 条回流：唯一一条不流回项目内部的
+  \node[fdcard, fill=fdlilac, draw=none, anchor=south, font=\scriptsize]
+    (rd) at (8.665,2.60) {产品与研发团队};
+  \draw[fdedge, dash pattern=on 1.4pt off 1.6pt] (g4t) -- (rd.south);
+  \node[fdlab, anchor=west] at (8.80,2.10) {④ 平台能力缺口上报};
+
+  % 三条回流边：线型区分，标签进图例
+  \draw[fdacc, line width=0.8pt, -{Stealth[length=3.6pt]}, opacity=0.85]
+    (g6) .. controls (13.725,-2.35) and (1.075,-2.35) .. (g1);
+  \draw[fdacc, line width=0.8pt, dashed, -{Stealth[length=3.6pt]}, opacity=0.85]
+    (g5) .. controls (11.195,-1.55) and (6.135,-1.55) .. (g3);
+  \draw[fdacc, line width=0.8pt, dotted, -{Stealth[length=3.6pt]}, opacity=0.85]
+    (g4) .. controls (8.665,-0.85) and (3.605,-0.85) .. (g2);
+
+  % 图例排成两行两列。四条排一行放不下——③ 那条会撞上 ② 的线样。
+  % 顺序按正文的顺序，不按线在图上的左右顺序：正文是①②③④讲下来的。
+  % 四条各画各的，不走 \foreach——线型参数里带逗号，会被当成条目分隔。
+  \draw[fdacc, line width=0.8pt] (0,-3.05) -- (0.6,-3.05);
+  \node[anchor=west, font=\scriptsize, text=fdmute] at (0.72,-3.05)
+    {① 采用中发现新用例 → 回第 1 关};
+  \draw[fdacc, line width=0.8pt, dashed] (8.20,-3.05) -- (8.80,-3.05);
+  \node[anchor=west, font=\scriptsize, text=fdmute] at (8.92,-3.05)
+    {② 上线暴露生产缺口 → 回第 3 关重切一片};
+  \draw[fdacc, line width=0.8pt, dotted] (0,-3.72) -- (0.6,-3.72);
+  \node[anchor=west, font=\scriptsize, text=fdmute] at (0.72,-3.72)
+    {③ 验收指标谈不拢 → 退回第 2 关重谈};
+  \draw[fdmute, line width=0.8pt, dash pattern=on 1.4pt off 1.6pt] (8.20,-3.72) -- (8.80,-3.72);
+  \node[anchor=west, font=\scriptsize, text=fdmute] at (8.92,-3.72)
+    {④ 平台能力缺口上报 → 出项目边界，交产研团队};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 3 · 上册第 12 章·国企与银行采购到上线
+% 左侧留一条部门栏。决定权在哪个口，是这张图最该先看出来的事，
+% 只标源文里点名的那四个口，其余留白——不替客户编组织架构。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdprocurement}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \def\lx{2.15}
+  \def\lw{7.4}
+
+  \foreach \y/\dept in {-0.34/业务口, -1.84/科技口, -3.34/采购口, -12.54/审计口}{
+    \node[fdgutter] at (1.85,\y) {\dept};
+  }
+  \draw[fdthin] (2.02,0.35) -- (2.02,-13.3);
+
+  \node[fdcard, anchor=north west, minimum width=\lw cm] (p1) at (\lx,0)
+    {业务口提出需求};
+  \node[fdcard, anchor=north west, minimum width=\lw cm] (p2) at (\lx,-1.5)
+    {科技口技术评审};
+  \node[fdask, anchor=north west, minimum width=\lw cm, align=center] (p3) at (\lx,-3.0)
+    {采购口选择流程};
+  \draw[fdedgea] (p1.south) -- (p2.north);
+  \draw[fdedgea] (p2.south) -- (p3.north);
+
+  % 三条采购路径并排
+  \foreach \i/\x/\ttl/\dt in {%
+    1/0.00/公开招标/{招标公告 → 开标\\→ 评标 → 定标},
+    2/5.10/竞争性磋商 · 谈判采购/{磋商 · 谈判\\→ 确定成交方},
+    3/10.20/国企非招标方式/{询比 · 竞价\\· 谈判 · 直接采购}%
+  }{
+    \fill[fdmilk, rounded corners=3pt] (\x,-4.85) rectangle (\x+4.6,-7.10);
+    \draw[fdacc, line width=1.6pt] (\x,-4.85) -- (\x+4.6,-4.85);
+    \node[font=\bfseries\scriptsize, text=fdink, anchor=north] at (\x+2.3,-5.10) {\ttl};
+    \node[font=\scriptsize, text=fdmute, anchor=north, align=center] at (\x+2.3,-5.75) {\dt};
+    \coordinate (r\i) at (\x+2.3,-4.85);
+    \coordinate (r\i b) at (\x+2.3,-7.10);
+  }
+  \draw[fdthin] (2.3,-4.30) -- (12.5,-4.30);
+  \draw[fdedge] (p3.south) -- (p3.south |- 0,-4.30);
+  \foreach \i in {1,2,3}{\draw[fdedge] ($(r\i)+(0,0.55)$) -- (r\i);}
+  \draw[fdthin] (2.3,-7.55) -- (12.5,-7.55);
+  \foreach \i in {1,2,3}{\draw[fdthin] (r\i b) -- ($(r\i b)+(0,-0.45)$);}
+
+  \node[fdcard, anchor=north west, minimum width=\lw cm] (p4) at (\lx,-7.95)
+    {合同签订};
+  \draw[fdedge] (p4.north |- 0,-7.55) -- (p4.north);
+
+  % 银行客户的额外一段
+  \node[fdask, anchor=north west, minimum width=\lw cm, align=center] (p5) at (\lx,-9.45)
+    {是银行客户？};
+  \node[fdout, fill=fdamber, anchor=west, text width=4.5cm] (bk) at (10.35,-9.90)
+    {\fdbranch{fdwarn}{是 · 银行客户额外一段}信息科技部门排期变更窗口；\\测试验收报告双签字};
+  \draw[fdedgea] (p4.south) -- (p5.north);
+  \draw[draw=fdwarn, line width=0.9pt, -{Stealth[length=3.4pt]}] (p5.east) -- (bk.west);
+
+  \node[fdcard, anchor=north west, minimum width=\lw cm] (p6) at (\lx,-11.25)
+    {部署上线};
+  \draw[fdedgea] (p5.south) -- node[fdlab, right, pos=0.5] {否 · 直接进入} (p6.north);
+  \draw[draw=fdwarn, line width=0.9pt, -{Stealth[length=3.4pt]}]
+    (bk.south) -- ++(0,-0.55) -| (p6.east);
+
+  \node[fdcard, fill=fdlilac, draw=none, anchor=north west, minimum width=\lw cm] (p7) at (\lx,-12.75)
+    {审计口事后复核};
+  \node[fdcav, anchor=west, text width=4.5cm] at (10.35,-13.20)
+    {国资委巡查 · 监管报送 · 网信合规检查};
+  \draw[fdedgea] (p6.south) -- (p7.north);
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 4 · 上册第 13 章·数据出境的合规路径判定
+% 三个法定结果做成右侧三个终点，箭头按结果着色——线交叉了也分得清。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdcrossborder}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \def\qw{6.5}
+  % ── 右侧三个终点 ────────────────────────────────────────
+  \node[fdout, fill=fdrose, anchor=north west, text width=3.9cm, font=\footnotesize] (T1) at (10.4,0.15)
+    {{\bfseries 申报数据出境\\安全评估}\\[1.5pt]{\scriptsize 最严一档，须经网信部门评估}};
+  \node[fdout, fill=fdamber, anchor=north west, text width=3.9cm, font=\footnotesize] (T2) at (10.4,-4.75)
+    {{\bfseries 标准合同 或\\个人信息保护认证}\\[1.5pt]{\scriptsize 二选一，均须备案}};
+  \node[fdout, fill=fdtint, anchor=north west, text width=3.9cm, font=\footnotesize] (T3) at (10.4,-7.75)
+    {{\bfseries 豁免}\\[1.5pt]{\scriptsize 仍需履行告知同意等一般义务}};
+
+  % ── 左侧判定 ────────────────────────────────────────────
+  \node[fdnum] (n1) at (0.3,-0.42) {1};
+  \node[fdask, anchor=north west, text width=\qw cm] (q1) at (0.78,0)
+    {数据处理者是否为{\bfseries 关键信息基础设施运营者}？};
+  \node[fdnum] (n2) at (0.3,-2.02) {2};
+  \node[fdask, anchor=north west, text width=\qw cm] (q2) at (0.78,-1.6)
+    {是否向境外提供{\bfseries 重要数据}？};
+  \node[fdnum] (n3) at (0.3,-3.42) {3};
+  \node[fdask, anchor=north west, text width=\qw cm] (q3) at (0.78,-3.0)
+    {{\bfseries 年度累计出境量}落在哪一档？};
+
+  % 三档并列，缩进 0.45cm 并用一条竖线归到第 3 问名下
+  \node[fdout, anchor=north west, text width=6.05cm] (a1) at (1.23,-4.15)
+    {个人信息 ≥ 100 万人，或敏感个人信息 ≥ 1 万人};
+  \node[fdout, anchor=north west, text width=6.05cm] (a2) at (1.23,-5.35)
+    {个人信息 10 万–100 万人，或敏感个人信息不满 1 万人};
+  \node[fdout, anchor=north west, text width=6.05cm] (a3) at (1.23,-6.55)
+    {低于上述门槛};
+  \draw[fdthin] (0.95,-3.85) -- (0.95,-6.85);
+  \foreach \a in {a1,a2,a3}{\draw[fdthin] (\a.west -| 0.95,0) -- (\a.west);}
+  \draw[fdthin] (q3.south -| 0.95,0) -- (0.95,-3.85);
+
+  \node[fdnum] (n4) at (0.3,-7.92) {4};
+  \node[fdask, anchor=north west, text width=\qw cm] (q4) at (0.78,-7.5)
+    {是否属于 2024 年新规豁免情形，{\bfseries 且}不涉及重要数据？};
+
+  \draw[fdedgea] (q1.south) -- node[fdlab, right, pos=0.5] {否} (q2.north);
+  \draw[fdedgea] (q2.south) -- node[fdlab, right, pos=0.5] {否} (q3.north);
+  \draw[fdedgea] (a3.south) -- (a3.south |- q4.north);
+
+  % ── 判定 → 终点。三种颜色对应三个终点 ────────────────────
+  \draw[draw=fdstop, line width=0.9pt, -{Stealth[length=3.4pt]}]
+    (q1.east) -- node[fdlab, above, pos=0.35] {是} ++(1.1,0) |- (T1.west);
+  \draw[draw=fdstop, line width=0.9pt, -{Stealth[length=3.4pt]}]
+    (q2.east) -- node[fdlab, above, pos=0.35] {是} ++(1.5,0) |- ([yshift=-0.24cm]T1.west);
+  \draw[draw=fdstop, line width=0.9pt, -{Stealth[length=3.4pt]}]
+    (a1.east) -- ++(1.9,0) |- ([yshift=-0.48cm]T1.west);
+  \draw[draw=fdwarn, line width=0.9pt, -{Stealth[length=3.4pt]}]
+    (a2.east) -- ++(2.3,0) |- (T2.west);
+  \draw[draw=fdwarn, line width=0.9pt, -{Stealth[length=3.4pt]}]
+    (q4.east) -- node[fdlab, above, pos=0.28] {否} ++(1.1,0) |- ([yshift=-0.34cm]T2.west);
+  \draw[draw=fdacc, line width=0.9pt, -{Stealth[length=3.4pt]}]
+    ([yshift=-0.42cm]q4.east) -- node[fdlab, above, pos=0.36] {是} ++(2.6,0) |- (T3.west);
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 5 · 下册六部结构（第 0 章导读）
+% 章号按实际章文件核过：第 9 章《评估的工程实现》单独成第三部，
+% 所以第二部是 4--8 章，不是 4--9 章。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdbookmaptwo}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \foreach \i/\x/\prt/\nm/\ch in {%
+    1/0.00/第一部/{开工\\之前}/{第 1--3 章},
+    2/2.48/第二部/{系统的\\五层}/{第 4--8 章},
+    3/4.96/第三部/{验收的\\工程实现}/{第 9 章},
+    4/7.44/第四部/{国产栈}/{第 10--11 章},
+    5/9.92/第五部/{工程案例}/{第 12--15 章},
+    6/12.40/第六部/{上手}/{第 16--17 章}%
+  }{
+    \fill[fdmilk, rounded corners=3pt] (\x,0) rectangle (\x+2.3,2.55);
+    \draw[fdacc, line width=2pt] (\x,2.55) -- (\x+2.3,2.55);
+    \node[font=\bfseries\scriptsize, text=fdacc, anchor=north] at (\x+1.15,2.32) {\prt};
+    \node[font=\bfseries\small, text=fdink, anchor=north, align=center]
+      at (\x+1.15,1.72) {\nm};
+    \node[font=\scriptsize, text=fdmute, anchor=south] at (\x+1.15,0.18) {\ch};
+  }
+  \foreach \x in {2.30,4.78,7.26,9.74,12.22}{
+    \draw[fdedgea] (\x+0.03,1.28) -- (\x+0.15,1.28);
+  }
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 6 · 下册第 4 章·「连不上」的分层排查
+% 排查本身就是分层的，所以图也按层排：一层一个判据、一条命令，
+% 右边挂这一层失败时该查什么。层与层之间只有「通过才往下」一条路。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdconnladder}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \def\qw{5.9}
+  \node[fdout, fill=fdpale, anchor=north west, text width=13.9cm, font=\footnotesize] (e0) at (0.78,0.9)
+    {{\bfseries 报错：无法连接目标服务}\ \ {\color{fdmute}\scriptsize 从下往上排，不要从应用层开始猜}};
+
+  \foreach \i/\y/\ttl/\cmd/\fail in {%
+    1/-0.55/{DNS 能解析吗？}/{nslookup / dig 目标域名}/{{\bfseries 解析失败，或解析到意外地址}\\· 是否命中 split-horizon DNS\\· 集成服务器是否接入客户内网 DNS\\· VPN / 隧道是否覆盖该域名},
+    2/-3.05/{TCP 端口可达吗？}/{telnet / nc 目标host:port}/{{\bfseries 连接超时或被拒绝}\\· 企业防火墙出站白名单\\· 目标是按域名还是按 IP 放行\\· 是否需要经过企业代理},
+    3/-5.55/{TLS 握手成功吗？}/{openssl s\_client -connect host:port -servername 域名}/{{\bfseries 握手失败 / 证书不受信任}\\· 证书链是否完整（含中间证书）\\· 是否命中企业代理 TLS 检查\\· 是否发送了正确的 SNI\\· 客户端信任库是否导入内网自签 CA},
+    4/-8.35/{认证通过吗？}/{应用层返回 401 / 403}/{{\bfseries 认证失败}\\· 令牌 / 证书是否过期或已轮换\\· 客户端与服务端时钟偏差\\· scope 与权限配置}%
+  }{
+    \node[fdnum] (n\i) at (0.3,\y-0.5) {\i};
+    \node[fdask, anchor=north west, text width=\qw cm] (q\i) at (0.78,\y)
+      {{\bfseries\ttl}\\[2pt]{\ttfamily\scriptsize\color{fdmute}\cmd}};
+    \node[fdout, fill=fdamber, anchor=north west, text width=6.1cm] (f\i) at (8.4,\y)
+      {\fail};
+    \draw[draw=fdwarn, line width=0.9pt, -{Stealth[length=3.4pt]}]
+      ([yshift=-0.15cm]q\i.east) -- node[fdlab, above, pos=0.45] {失败} ++(1.5,0);
+  }
+  \fddrop{e0}{q1}
+  \foreach \i/\j in {1/2,2/3,3/4}{
+    \draw[fdedgea] (q\i.south) -- node[fdlab, right, pos=0.5] {通过} (q\j.north);
+  }
+  \node[fdout, fill=fdtint, anchor=north west, text width=13.9cm] (fin) at (0.78,-10.7)
+    {{\bfseries 四层都通过、应用层仍报错} —— 问题已经不在连接上，转入具体接口的业务逻辑排查};
+  \draw[fdedgea] (q4.south) -- node[fdlab, right, pos=0.5] {通过} (q4.south |- fin.north);
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 7 · 下册第 5 章·一条错误回答的三分法
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdragtriage}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \def\qw{6.3}
+  \node[fdout, fill=fdpale, anchor=north west, text width=13.9cm, font=\footnotesize] (e0) at (0.78,0.9)
+    {{\bfseries 一条错误回答}};
+
+  \node[fdnum] (n1) at (0.3,-0.98) {1};
+  \node[fdask, anchor=north west, text width=\qw cm] (q1) at (0.78,-0.55)
+    {知识库里{\bfseries 是否存在}支持正确答案的文档？};
+  \node[fdout, fill=fdrose, anchor=north west, text width=5.7cm] (o1) at (8.8,-0.55)
+    {\fdbranch{fdstop}{否 —— 数据缺失}不属于三分法。先补内容，补完再谈修哪一段};
+
+  \node[fdnum] (n2) at (0.3,-2.68) {2};
+  \node[fdask, anchor=north west, text width=\qw cm] (q2) at (0.78,-2.25)
+    {该文档{\bfseries 是否出现}在本次检索结果的 context 里？};
+  \node[fdout, fill=fdamber, anchor=north west, text width=5.7cm] (o2) at (8.8,-2.25)
+    {\fdbranch{fdwarn}{否 —— 检索失败}修检索算法 / 索引 / query 改写};
+  \node[fdout, fill=fdamber, anchor=north west, text width=5.7cm] (o2b) at (8.8,-3.75)
+    {\fdbranch{fdwarn}{在，但内容有误 —— 数据污染}修数据源头，隔离或更新该文档};
+
+  \node[fdnum] (n3) at (0.3,-5.63) {3};
+  \node[fdask, anchor=north west, text width=\qw cm] (q3) at (0.78,-5.2)
+    {生成的回答{\bfseries 是否忠实于} context？};
+  \node[fdout, fill=fdamber, anchor=north west, text width=5.7cm] (o3) at (8.8,-5.2)
+    {\fdbranch{fdwarn}{否 —— 模型幻觉}修 prompt / 换模型 / 加 faithfulness 门禁};
+  \node[fdout, fill=fdtint, anchor=north west, text width=5.7cm] (o4) at (8.8,-6.7)
+    {\fdbranch{fdacc}{是 —— 回答其实是对的}该查评估集本身：很可能是标注错了};
+
+  \fddrop{e0}{q1}
+  \draw[fdedgea] (q1.south) -- node[fdlab, right, pos=0.5] {存在} (q2.north);
+  \draw[fdedgea] (q2.south) -- node[fdlab, right, pos=0.5] {在，且内容正确} (q3.north);
+  \draw[draw=fdstop, line width=0.9pt, -{Stealth[length=3.4pt]}]
+    ([yshift=-0.15cm]q1.east) -- ++(1.55,0);
+  \draw[draw=fdwarn, line width=0.9pt, -{Stealth[length=3.4pt]}]
+    ([yshift=-0.15cm]q2.east) -- ++(1.55,0);
+  \draw[draw=fdwarn, line width=0.9pt, -{Stealth[length=3.4pt]}]
+    ([yshift=-0.15cm]q2.east) -- ++(0.75,0) |- (o2b.west);
+  \draw[draw=fdwarn, line width=0.9pt, -{Stealth[length=3.4pt]}]
+    ([yshift=-0.15cm]q3.east) -- ++(1.55,0);
+  \draw[draw=fdacc, line width=0.9pt, -{Stealth[length=3.4pt]}]
+    ([yshift=-0.15cm]q3.east) -- ++(0.75,0) |- (o4.west);
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 8 · 下册第 7 章·四种编排拓扑
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdtopologies}{%
+\begin{tikzpicture}[x=1cm,y=1cm,
+  tp/.style={rounded corners=2.4pt, draw=fdacc, line width=0.8pt, fill=white,
+             inner sep=3.4pt, align=center, font=\scriptsize, text=fdink, minimum height=6mm},
+  tq/.style={rounded corners=2.4pt, draw=fdwarn, line width=0.8pt, fill=fdamber,
+             inner sep=3.4pt, align=center, font=\scriptsize, text=fdink, minimum height=6mm}]
+  \foreach \x/\y/\ttl in {0/0/顺序, 7.6/0/分支, 0/-3.9/循环, 7.6/-3.9/主管}{
+    \draw[rounded corners=3pt, draw=fdline, line width=0.7pt, fill=fdmilk]
+      (\x,\y) rectangle (\x+7.2,\y-3.5);
+    \node[font=\bfseries\footnotesize, text=fdacc, anchor=north west] at (\x+0.3,\y-0.22) {\ttl};
+  }
+
+  % 顺序
+  \node[tp] (a1) at (1.6,-2.1) {节点 1};
+  \node[tp] (a2) at (3.6,-2.1) {节点 2};
+  \node[tp] (a3) at (5.6,-2.1) {节点 3};
+  \draw[fdedgea] (a1) -- (a2); \draw[fdedgea] (a2) -- (a3);
+
+  % 分支
+  \node[tq] (b1) at (9.4,-2.1) {路由节点};
+  \node[tp] (b2) at (12.9,-1.5) {分支 A};
+  \node[tp] (b3) at (12.9,-2.7) {分支 B};
+  \draw[fdedgea] (b1) -- node[fdlab, above, pos=0.55] {条件 a} (b2);
+  \draw[fdedgea] (b1) -- node[fdlab, below, pos=0.55] {条件 b} (b3);
+
+  % 循环
+  \node[tp] (c1) at (2.3,-5.3) {执行节点};
+  \node[tq] (c2) at (2.3,-6.6) {是否完成？};
+  \node[tp] (c3) at (5.7,-6.6) {结束};
+  \draw[fdedgea] (c1) -- (c2);
+  \draw[fdedgea] (c2) -- node[fdlab, above, pos=0.5] {是} (c3);
+  \draw[fdedgea] (c2.west) -- ++(-1.1,0) |- node[fdlab, left, pos=0.25] {否} (c1.west);
+
+  % 主管：去程走上侧、回程走下侧，分成两条才看得出是来回一趟
+  \node[tq] (d1) at (9.6,-5.95) {主管节点};
+  \node[tp] (d2) at (13.0,-5.3) {专家 A};
+  \node[tp] (d3) at (13.0,-6.6) {专家 B};
+  \draw[fdedgea] ([yshift=2.4pt]d1.east) -- ([yshift=2.4pt]d2.west);
+  \draw[fdedgea] ([yshift=-2.4pt]d2.west) -- ([yshift=-2.4pt]d1.east);
+  \draw[fdedgea] ([yshift=2.4pt]d1.east) -- ([yshift=2.4pt]d3.west);
+  \draw[fdedgea] ([yshift=-2.4pt]d3.west) -- ([yshift=-2.4pt]d1.east);
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 9 · 下册第 8 章·离线部署包的两段
+% 分两条泳道画：交付方那五步和客户断网环境那几步，中间隔着一次介质交接。
+% 这条界线是整件事最容易被忽略的部分——签得出来不等于验得了。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdofflinepack}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  % 泳道一：交付方
+  \fill[fdmilk, rounded corners=3pt] (0,0) rectangle (14.5,-2.65);
+  \node[font=\bfseries\scriptsize, text=fdacc, anchor=north west] at (0.25,-0.12) {交付方 · 有网环境};
+  \foreach \i/\x/\nm in {%
+    1/0.30/{镜像导出\\多架构构建}, 2/3.14/{cosign\\签名}, 3/5.98/{syft\\生成 SBOM},
+    4/8.82/{离线依赖\\打包}, 5/11.66/{打包为单一\\离线安装介质}}{
+    \node[fdcard, anchor=north west, minimum width=2.24cm, font=\scriptsize] (s\i) at (\x,-0.72) {\nm};
+  }
+  \foreach \i/\j in {1/2,2/3,3/4,4/5}{\draw[fdedgea] (s\i.east) -- (s\j.west);}
+
+  % 交接
+  \draw[fdedgea, line width=1.2pt] (12.78,-2.05) -- (12.78,-3.05);
+  \node[fdlab, anchor=west, font=\bfseries\scriptsize, text=fdwarn] at (12.95,-2.55) {介质交接};
+
+  % 泳道二：客户断网环境
+  \fill[fdamber, rounded corners=3pt, opacity=0.45] (0,-3.05) rectangle (14.5,-5.75);
+  \node[font=\bfseries\scriptsize, text=fdwarn, anchor=north west] at (0.25,-3.17) {客户现场 · 断网环境};
+  \node[fdcard, anchor=north west, minimum width=3.0cm, font=\scriptsize] (t1) at (0.30,-3.85)
+    {执行离线安装脚本};
+  \foreach \i/\x/\nm in {1/4.20/导入镜像, 2/6.75/验签, 3/9.30/{校验 SBOM}, 4/11.85/{helm install}}{
+    \node[fdcard, anchor=north west, minimum width=2.0cm, font=\scriptsize, fill=white] (u\i) at (\x,-3.85) {\nm};
+  }
+  \draw[fdedgea] (t1.east) -- (u1.west);
+  \foreach \i/\j in {1/2,2/3,3/4}{\draw[fdedgea] (u\i.east) -- (u\j.west);}
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.30,-4.85)
+    {验签必须能在断网环境里完成 —— 能不能签是一回事，能不能在一台没有外网的机器上验，是另一回事。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 10 · 下册第 8 章·三级缓存级联
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdcachetiers}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[fdout, fill=fdpale, anchor=north west, text width=8.6cm, font=\footnotesize] (in) at (0.3,0.9)
+    {{\bfseries 请求进入}};
+
+  \node[fdask, anchor=north west, text width=8.2cm] (l1) at (0.3,-0.2)
+    {{\bfseries L1 · 进程内精确匹配缓存}\\[2pt]{\scriptsize\color{fdmute}按 request hash 命中，最快，不跨进程}};
+  \node[fdask, anchor=north west, text width=8.2cm] (l2) at (0.3,-2.15)
+    {{\bfseries L2 · 语义缓存}\\[2pt]{\scriptsize\color{fdmute}Redis ＋ 向量相似度；命中后还要过一致性检查}};
+  \node[fdask, anchor=north west, text width=8.2cm] (l3) at (0.3,-4.10)
+    {{\bfseries L3 · vLLM 推理}\\[2pt]{\scriptsize\color{fdmute}内部 KV cache / prefix caching，仍有一层复用}};
+
+  \node[fdout, fill=fdtint, anchor=north, minimum width=3.2cm, minimum height=4.7cm,
+        align=center, font=\footnotesize] (ret) at (12.9,-0.2) {{\bfseries 直接返回}};
+
+  \fddrop{in}{l1}
+  \draw[fdedgea] (l1.south) -- node[fdlab, right, pos=0.5] {未命中} (l2.north);
+  \draw[fdedgea] (l2.south) -- node[fdlab, right, pos=0.5] {未命中，或一致性检查不通过} (l3.north);
+  \foreach \i/\lb in {1/命中, 2/{命中且一致}, 3/推理完成}{
+    \draw[draw=fdacc, line width=0.9pt, -{Stealth[length=3.4pt]}]
+      (l\i.east) -- node[fdlab, above, pos=0.5] {\lb} (l\i.east -| ret.west);
+  }
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 11 · 下册第 10 章·私有化模型选型的五问
+% 五个问题岔出去的东西性质完全不同：第一问岔出去是「这条路走不通」，
+% 中间几问岔出去是「回去改了再来」，第四问岔出去是「继续走，但带上一条约束」。
+% Mermaid 里这三种长得一模一样，这里用底色分开。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdmodelpick}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \def\qw{5.6}
+  \node[fdout, fill=fdpale, anchor=north west, text width=13.9cm, font=\footnotesize] (e0) at (0.78,0.9)
+    {{\bfseries 客户需求}};
+
+  \foreach \i/\y/\q/\ans/\col/\txt in {%
+    1/-0.55/{商用授权可接受吗？}/{否 · 不确定}/fdstop/{排除对应档位。\\3B 研究许可优先排除},
+    2/-2.30/{显存预算够吗？}/{不够}/fdwarn/{降档位，或申请更大硬件。\\估算值留 20\%--30\% 余量},
+    3/-4.05/{上下文长度够吗？}/{不够}/fdwarn/{改配置开启扩展，\\并验证稳定性},
+    4/-5.80/{需要函数调用吗？}/{需要}/fdacc/{优先 Qwen2.5 系，\\Hermes 格式最成熟},
+    5/-7.55/{中文能力达标吗？}/{未验证}/fdwarn/{拿客户真实语料实测，\\不采信直觉判断}%
+  }{
+    \node[fdnum] (n\i) at (0.3,\y-0.46) {\i};
+    \node[fdask, anchor=north west, minimum width=\qw cm, align=left] (q\i) at (0.78,\y) {{\bfseries\q}};
+    \node[fdout, anchor=north west, text width=5.9cm,
+          fill=\col!16] (o\i) at (8.1,\y) {\fdbranch{\col}{\ans}\txt};
+    \draw[draw=\col, line width=0.9pt, -{Stealth[length=3.4pt]}]
+      ([yshift=-0.24cm]q\i.east) -- ++(1.42,0);
+  }
+  \fddrop{e0}{q1}
+  \foreach \i/\j/\lb in {1/2/可接受, 2/3/够, 3/4/够, 4/5/{不需要 · 或已满足}}{
+    \draw[fdedgea] (q\i.south) -- node[fdlab, right, pos=0.5] {\lb} (q\j.north);
+  }
+  \node[fdout, fill=fdtint, anchor=north west, text width=13.9cm] (fin) at (0.78,-9.3)
+    {{\bfseries 选定档位} —— 五问全部答完才叫选定，跳过任何一问都是把风险留给上线之后};
+  \draw[fdedgea] (q5.south) -- node[fdlab, right, pos=0.5] {达标} (q5.south |- fin.north);
+
+  % 图例：三种岔路性质
+  \foreach \x/\col/\lb in {0.78/fdstop/{一票否决 · 不进入后续比较},
+                           6.20/fdwarn/{返工重来 · 改完回到本问},
+                           11.30/fdacc/{附加约束 · 不阻断，继续往下}}{
+    \fill[\col!16, rounded corners=1.6pt, draw=\col, line width=0.6pt]
+      (\x,-10.55) rectangle (\x+0.42,-10.85);
+    \node[anchor=west, font=\scriptsize, text=fdmute] at (\x+0.55,-10.7) {\lb};
+  }
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 12 · 下册第 11 章·信创现场的三条路径
+% 三条路径并排，各自带自己的注意事项；底下一条是三条路共同的告诫。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdxinchuang}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[fdout, fill=fdpale, anchor=north, minimum width=8.0cm, align=center,
+        font=\footnotesize] (e0) at (7.25,0.9) {{\bfseries 客户现场硬件盘点}};
+  \draw[fdthin] (2.45,-0.55) -- (12.05,-0.55);
+  \draw[fdedgea] (e0.south) -- (7.25,-0.55);
+
+  \foreach \i/\x/\cond/\route/\cav/\col in {%
+    1/0.00/{有昇腾 NPU}/{CANN ＋ MindIE 路径}/{官方模型清单需按\\当前版本重新核对}/fdacc,
+    2/4.90/{无昇腾，有国产 GPU\\寒武纪 · 海光 · 摩尔线程}/{按厂商框架适配}/{参考第 10 章模型选型表\\校验兼容性}/fdacc,
+    3/9.80/{两者都没有}/{纯 CPU 降级}/{套用 §8.3\\三档降级方法论}/fdwarn%
+  }{
+    \node[anchor=north, font=\bfseries\scriptsize, text=\col, align=center]
+      (c\i) at (\x+2.3,-0.72) {\cond};
+    \draw[fdedgea] (\x+2.3,-0.55) -- (\x+2.3,-0.72);
+    \node[fdcard, anchor=north, minimum width=4.0cm, draw=\col, line width=0.9pt,
+          font=\footnotesize] (p\i) at (\x+2.3,-1.95) {{\bfseries\route}};
+    \node[fdcav, anchor=north, align=center, text width=4.3cm] at (\x+2.3,-2.85) {\cav};
+    \draw[fdthin] (\x+2.3,-3.75) -- (\x+2.3,-4.05);
+    \draw[fdedgea] (c\i.south) -- (p\i.north);
+  }
+  \draw[fdthin] (2.3,-4.05) -- (12.1,-4.05);
+  \draw[fdedgea] (7.2,-4.05) -- (7.2,-4.4);
+  \node[fdout, fill=fdamber, anchor=north west, text width=13.9cm] (g) at (0.3,-4.4)
+    {{\bfseries 性能预期一律以官方文档给的流程为准} —— 第三方给的倍数说法彼此矛盾时，不采信任何一方};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 13 · 下册第 12 章·三个智能体与一条人工回路
+% 人工审批不是主干上的一个节点，是从主干上岔出去又并回来的一段。
+% 画成岔路才看得出：不触发红线的请求根本不经过它。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdmcpagents}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \def\mw{6.6}
+  \node[fdout, fill=fdpale, anchor=north west, text width=\mw cm, font=\footnotesize] (m0) at (0.3,0.9)
+    {{\bfseries 客户请求 · 工单}};
+  \node[fdask, anchor=north west, text width=\mw cm] (m1) at (0.3,-0.2)
+    {{\bfseries 发现智能体}\\[2pt]{\scriptsize\color{fdmute}只读：查询类 MCP 工具}};
+  \node[fdask, anchor=north west, text width=\mw cm] (m2) at (0.3,-1.95)
+    {{\bfseries 操作智能体}\\[2pt]{\scriptsize\color{fdmute}写入类 MCP 工具，生成操作提案}};
+  \node[fdask, anchor=north west, text width=\mw cm, draw=fdwarn] (m3) at (0.3,-3.70)
+    {{\bfseries 合规智能体 · 规则校验}\\[2pt]{\scriptsize\color{fdmute}唯一决定走不走人工的那一步}};
+  \node[fdout, fill=fdtint, anchor=north west, text width=\mw cm] (m4) at (0.3,-5.85)
+    {{\bfseries 自动放行}};
+  \node[fdcard, anchor=north west, minimum width=\mw cm] (m5) at (0.3,-6.95)
+    {MCP Server 写入工具};
+  \node[fdcard, fill=fdlilac, draw=none, anchor=north west, minimum width=\mw cm] (m6) at (0.3,-8.15)
+    {遗留大型机 · CRM};
+
+  \draw[fdedgea] (m0.south) -- (m1.north);
+  \draw[fdedgea] (m1.south) -- (m2.north);
+  \draw[fdedgea] (m2.south) -- (m3.north);
+  \draw[fdedgea] (m3.south) -- node[fdlab, right, pos=0.5] {低风险，规则命中} (m4.north);
+  \draw[fdedgea] (m4.south) -- (m5.north);
+  \draw[fdedgea] (m5.south) -- (m6.north);
+
+  % 人工回路
+  \fill[fdamber, rounded corners=3pt, opacity=0.45] (9.0,-3.55) rectangle (14.6,-6.30);
+  \node[font=\bfseries\scriptsize, text=fdwarn, anchor=north east] at (14.4,-3.68) {人工回路};
+  \node[fdcard, anchor=north west, text width=5.0cm, align=left, font=\scriptsize] (h1) at (9.2,-4.25)
+    {LangGraph {\ttfamily interrupt()} 转人工审批};
+  \node[fdcard, anchor=north west, minimum width=2.2cm, font=\scriptsize] (h2) at (9.2,-5.35)
+    {专员确认};
+  \node[fdcard, anchor=north west, minimum width=2.2cm, font=\scriptsize] (h3) at (12.0,-5.35)
+    {{\ttfamily Command(resume)}};
+  \draw[draw=fdwarn, line width=0.9pt, -{Stealth[length=3.4pt]}]
+    ([yshift=-0.2cm]m3.east) -- node[fdlab, above, pos=0.5, align=center] {大额 · 异常\\监管红线} ([yshift=-0.2cm]m3.east -| h1.west);
+  \draw[fdedge] (h1.south -| h2.north) -- (h2.north);
+  \draw[fdedge] (h2.east) -- (h3.west);
+  \draw[draw=fdwarn, line width=0.9pt, -{Stealth[length=3.4pt]}]
+    (h3.south) -- ++(0,-0.5) -| ([xshift=0.9cm]m4.east) |- (m4.east);
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 14 · 下册附录 A · 12 个 Lab 的依赖关系
+% 原图把「八个 Lab 汇入毕业项目」画成八条线，全部交叉在一起。
+% 这里换成一条汇总括号：交叉线没了，信息一条没少。
+%
+% 线型的含义按附录正文（§A.3 那两段）定：
+%   实线＝实施计划正文里写明的技术依赖，
+%   虚线＝本附录基于产出物性质做的推断。
+% 汇入毕业项目那条也属于推断，所以那条括号是虚的。
+% 图例改过一次——最初写成「产物复用／方法复用」，跟正文对不上。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdlabgraph}{%
+\begin{tikzpicture}[x=1cm,y=1cm,
+  lab/.style={rounded corners=2.6pt, draw=fdacc, line width=0.8pt, fill=white,
+              inner sep=3.6pt, align=center, font=\scriptsize, text=fdink,
+              minimum width=3.05cm, minimum height=9mm}]
+  \node[lab, fill=fdmilk, anchor=north west] (L11) at (5.55,0)
+    {{\bfseries Lab-11}\\工作流发现};
+  \node[fdcav, anchor=west, text width=3.6cm, fill=white, inner sep=2.5pt] at (9.15,-0.45)
+    {需求定界方法论，用来设计其他 Lab 的验收标准};
+
+  \node[lab, anchor=north west] (L01) at (0.00,-1.95) {{\bfseries Lab-01}\\脏 PDF 摄取};
+  \node[lab, anchor=north west] (L02) at (3.70,-1.95) {{\bfseries Lab-02}\\mTLS ＋ OAuth2 桥接};
+  \node[lab, anchor=north west] (L04) at (7.40,-1.95) {{\bfseries Lab-04}\\混合检索 RAG};
+  \node[lab, anchor=north west] (L05) at (11.10,-1.95) {{\bfseries Lab-05}\\Evals ＋ CI 门禁};
+  \node[lab, anchor=north west] (L10) at (0.00,-4.15) {{\bfseries Lab-10}\\事件流对账 Agent};
+  \node[lab, anchor=north west] (L03) at (3.70,-4.15) {{\bfseries Lab-03}\\遗留 API 封装 MCP};
+  \node[lab, anchor=north west] (L06) at (9.25,-4.15) {{\bfseries Lab-06}\\vLLM ＋ 量化\\＋ 语义缓存};
+  \node[lab, anchor=north west] (L07) at (9.25,-5.95) {{\bfseries Lab-07}\\离线部署包};
+  \node[lab, anchor=north west] (L08) at (9.25,-7.55) {{\bfseries Lab-08}\\Langfuse 可观测性};
+  \node[lab, anchor=north west, draw=fdmute, fill=fdpale] (L09) at (0.00,-5.95)
+    {{\bfseries Lab-09}\\国产栈演练};
+  \node[fdcav, anchor=north west, text width=4.6cm] at (3.40,-6.05)
+    {不依赖其他 Lab，也不被依赖 —— 客户现场是信创栈时，任何时点都可以插进来};
+
+  \draw[fddep] (L11.west) -| (L01.north);
+  \draw[fddep] (L11.east) -| (L05.north);
+  \draw[fddep] (L02.south) -- (L03.north);
+  \draw[fdedgea] (L01.south) -- node[fdlaba, right, pos=0.5] {①} (L10.north);
+  \draw[fdedgea] (L04.south) -- ++(0,-0.55)
+    -| node[fdlaba, above, pos=0.22] {②} ([xshift=-0.55cm]L06.north);
+  \draw[fdedgea] (L05.south) -- ++(0,-0.90)
+    -| node[fdlaba, above, pos=0.22] {③} ([xshift=0.55cm]L06.north);
+  \draw[fddep] (L06.south) -- (L07.north);
+  \draw[fddep] (L07.south) -- (L08.north);
+  \draw[fddep] (L06.east) -- ++(0.6,0) |- (L08.east);
+
+  % 汇总括号 → 毕业项目
+  \draw[decorate, decoration={brace, amplitude=6pt, mirror}, draw=fdmute, line width=0.7pt,
+        dash pattern=on 1.4pt off 1.6pt]
+    (0.0,-8.95) -- (14.15,-8.95);
+  \node[fdout, fill=fdtint, anchor=north west, text width=13.9cm] at (0.0,-9.60)
+    {{\bfseries Lab-12 · 毕业项目} —— 上面八个 Lab 的产出全部汇入：01 · 03 · 04 · 05 · 06 · 07 · 08 · 10。
+     Lab-02 经 Lab-03 汇入；Lab-09 与 Lab-11 不直接汇入。括号是虚的：这条汇入关系同属推断一类。};
+
+  % 图例。线型的含义跟正文一致：实线是计划写明的，虚线是本附录推断的。
+  \draw[fdacc, line width=0.9pt, -{Stealth[length=3.4pt]}] (0.0,-10.85) -- (0.7,-10.85);
+  \node[anchor=west, font=\scriptsize, text=fdmute] at (0.8,-10.85)
+    {实线：实施计划正文写明的技术依赖};
+  \draw[fddep] (6.6,-10.85) -- (7.3,-10.85);
+  \node[anchor=west, font=\scriptsize, text=fdmute] at (7.4,-10.85)
+    {虚线：本附录基于产出物性质的推断，可按自己的节奏调整};
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.0,-11.30)
+    {① Lab-01 → Lab-10：结构化摄取产物是对账 Agent 的输入（上册第 16 章）\quad
+     ② Lab-04 → Lab-06：检索链路是高并发场景的优化对象（第 15 章）\\
+     ③ Lab-05 → Lab-06：压测输入直接复用黄金集与对抗集（§8.6）};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% ═══  方法论插图                                             ═══
+%
+% 收录判据：图要替正文扛一段说不清的论证。够格的四种形状——
+%   两轴权衡（三角、象限、对角线）、顺序与累积、层次与缺口、分布与趋势。
+% 不够格的：已经是好表格的（表更适合查）、没有内在关系的并列清单、
+%   画出来只是「把清单装进方框」的。
+% ═══════════════════════════════════════════════════════════════
+
+% ═══════════════════════════════════════════════════════════════
+% 图 15 · 上册第 2 章·四层骨架
+% 全书的脊梁，后面每一章都挂在这四层里的某一处。
+% 右栏是「拿到一个项目按顺序问的四个问题」——正文里四问和四层一一对应，
+% 并排画出来，这张图就同时是骨架图和自检表。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdskeleton}{%
+\begin{tikzpicture}[x=1cm,y=1cm,
+  lyr/.style={rounded corners=3pt, draw=fdacc, line width=0.9pt, fill=white},
+  qbox/.style={fdout, fill=fdmilk, anchor=north west, text width=5.3cm}]
+
+  \foreach \i/\y/\h/\nm/\sub in {%
+    1/0/1.55/{公理}/{风险转移},
+    2/-1.85/1.55/{过程}/{六道关卡},
+    3/-3.70/2.20/{结果}/{证据 · 控制 · 接管},
+    4/-6.20/2.55/{资产}/{验收集（技能从属于它）}%
+  }{
+    \node[fdnum] (k\i) at (0.3,\y-0.55) {\i};
+    \draw[lyr] (0.75,\y) rectangle (8.4,\y-\h);
+    \node[font=\bfseries\small, text=fdacc, anchor=north west] at (0.95,\y-0.12) {第 \i\ 层 · \nm};
+    \node[font=\bfseries\footnotesize, text=fdink, anchor=north east] at (8.20,\y-0.12) {\sub};
+  }
+
+  % 第 1 层
+  \node[fdcav, anchor=north west, text width=7.1cm] at (0.95,-0.62)
+    {客户付溢价买的不是代码，是把「这项技术在我们的场景里到底能不能落地」这个不确定性，
+     转移给一个愿意对结果负责的人};
+
+  % 第 2 层：六关小轨
+  \foreach \i/\x/\nm in {1/0.95/选题, 2/2.20/定界, 3/3.45/切片,
+                         4/4.70/验收, 5/5.95/上线, 6/7.20/采用}{
+    \node[rounded corners=2pt, draw=fdline, line width=0.6pt, fill=fdmilk,
+          inner sep=2.6pt, font=\scriptsize, text=fdink, anchor=north west,
+          minimum width=1.05cm, align=center] at (\x,-2.52) {\nm};
+  }
+  \foreach \x in {2.00,3.25,4.50,5.75,7.00}{
+    \draw[fdedgea, line width=0.7pt] (\x,-2.76) -- (\x+0.18,-2.76);
+  }
+
+  % 第 3 层：三样结果，各自对着一个会说「不行」的人
+  \foreach \i/\x/\nm/\who in {1/0.95/证据/{没有它，\\业务不该信},
+                              2/3.45/控制/{没有它，\\安全部门不该放},
+                              3/5.95/接管/{客户不能接管，\\FDE 不该走}}{
+    \fill[fdtint, rounded corners=2.4pt] (\x,-4.35) rectangle (\x+2.45,-5.72);
+    \node[font=\bfseries\footnotesize, text=fdink, anchor=north] at (\x+1.225,-4.45) {\nm};
+    \node[font=\scriptsize, text=fdmute, anchor=north, align=center]
+      at (\x+1.225,-4.98) {\who};
+  }
+
+  % 第 4 层
+  \node[fdcav, anchor=north west, text width=7.1cm] at (0.95,-6.82)
+    {模型换了、供应商换了、芯片按信创要求换了，只有它不用重建。
+     反过来说更准确：正是因为有它，才敢换。};
+  \foreach \i/\x/\tag in {1/0.95/{单调增长，永不删除}, 2/3.44/{必须反锁定},
+                          3/5.93/{资产在客户环境里}}{
+    \fill[fdmilk, rounded corners=1.8pt, draw=fdacc, line width=0.5pt]
+      (\x,-8.28) rectangle (\x+2.38,-7.82);
+    \node[font=\scriptsize, text=fdacc] at (\x+1.19,-8.05) {\tag};
+  }
+
+  % 右栏：四个问题
+  \draw[fdthin] (8.72,0.05) -- (8.72,-8.75);
+  \node[font=\bfseries\footnotesize, text=fdmute, anchor=south west] at (9.05,0.18)
+    {拿到一个项目，按顺序问这四句};
+  \node[qbox] (q1) at (9.05,0)
+    {{\bfseries 这件事降低了哪一个不确定性？}\\降不了，别做。};
+  \node[qbox] (q2) at (9.05,-1.85)
+    {{\bfseries 现在在第几关？}\\说不出来，先把关定了。};
+  \node[qbox] (q3) at (9.05,-3.70)
+    {{\bfseries 这一关结束的时候，攒的是证据、控制，还是接管？}};
+  \node[qbox] (q4) at (9.05,-6.20)
+    {{\bfseries 做完之后，客户手上多了什么模型换了也不用重建的东西？}\\
+     答不出来，这一单是纯服务。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 16 · 上册第 5 章·可行性三角，以及三角之外那道门禁
+% 正文整节在讲一个三角形，原来却只有一张打分表。
+% 门禁单独画在三角外面，因为正文说得很清楚：它管的不是「能不能做成」，
+% 后果的形状也不一样——数据拿不到可以改方案，备案过不了要整个架构重来。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdtriangle}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \coordinate (TA) at (4.2,0);       % 数据
+  \coordinate (TB) at (0.9,-4.5);    % 权限
+  \coordinate (TC) at (7.5,-4.5);    % 时间
+  \fill[fdmilk] (TA) -- (TB) -- (TC) -- cycle;
+  \draw[fdacc, line width=1.1pt] (TA) -- (TB) -- (TC) -- cycle;
+  \node[font=\bfseries\footnotesize, text=fdmute, align=center] at (4.2,-2.85)
+    {三个维度\\全部黄灯及以上，\\才进入范围文档};
+
+  \node[fdcard, draw=fdacc, line width=0.9pt, anchor=south, text width=4.4cm,
+        align=center] at (4.2,0.30)
+    {{\bfseries 数据}\\[1pt]{\scriptsize\color{fdmute}有没有、能不能拿到、质量够不够 —— 是三个不同的问题}};
+  \node[fdcard, draw=fdacc, line width=0.9pt, anchor=north, text width=3.3cm,
+        align=center] at (1.75,-4.80)
+    {{\bfseries 权限}\\[1pt]{\scriptsize\color{fdmute}谁批、多久批、批不下来有没有绕行方案}};
+  \node[fdcard, draw=fdacc, line width=0.9pt, anchor=north, text width=3.3cm,
+        align=center] at (6.65,-4.80)
+    {{\bfseries 时间}\\[1pt]{\scriptsize\color{fdmute}deadline 背后有没有一个具体的外部事件}};
+
+  % 右侧：三档判读
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (9.5,0.10)
+    {每一维只判三档};
+  \foreach \i/\y/\col/\nm/\txt in {%
+    1/-0.50/fdstop/红灯/{先别接。在它被解决之前，不进入报价和排期},
+    2/-1.85/fdwarn/黄灯/{可接，但必须写进假设 / 依赖条款},
+    3/-3.05/fdacc/绿灯/{可直接排期}}{
+    \fill[\col!16, rounded corners=2.4pt, draw=\col, line width=0.6pt]
+      (9.5,\y) rectangle (10.35,\y-0.5);
+    \node[font=\bfseries\scriptsize, text=\col] at (9.925,\y-0.25) {\nm};
+    \node[fdcav, anchor=north west, text width=3.85cm] at (10.55,\y+0.02) {\txt};
+  }
+  \node[fdout, fill=fdrose, anchor=north west, text width=4.85cm] at (9.5,-3.85)
+    {{\bfseries\color{fdstop}任一维红灯 ＝ 一票否决。}不是说这项目不能做，
+     是说红灯转成黄灯之前，不该谈范围。};
+
+  % 三角之外那道门禁
+  \draw[fdthin] (0,-6.55) -- (14.35,-6.55);
+  \node[fdout, fill=fdamber, anchor=north west, text width=13.9cm] at (0.15,-6.85)
+    {{\bfseries 三角之外还有一道门禁：这套架构合不合法。}\\[2pt]
+     三角管的是「能不能做成」。合规管的是另一件事，后果的形状也不同 ——
+     数据拿不到可以改方案，权限批不下来可以先用沙箱绕；
+     {\bfseries 备案过不了、数据不能出境，改的不是方案里的某个环节，是整个架构的前提}，
+     按「调用云端 API」报的价和排的期要整体换成私有化部署，从头再来一遍。
+     而这类审批周期以月计。{\bfseries 所以它必须在第 1 关／第 2 关问完，不能等到设计阶段。}};
+  \foreach \i/\x/\txt in {%
+    1/0.15/{要不要办大模型备案\\（是否向境内公众提供、\\是否有舆论属性）},
+    2/4.85/{数据出不出境，\\落在哪一档},
+    3/9.55/{客户是不是\\关键信息基础设施运营者}}{
+    \node[fdcard, draw=fdwarn, line width=0.8pt, anchor=north west, text width=4.1cm,
+          font=\scriptsize] at (\x,-8.95) {\txt};
+  }
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 17 · 上册第 7 章·最小可执行业务模型的七要素
+% 七要素不是一张七行的清单，它有结构：三样回答「能不能建模」，
+% 四样回答「谁在什么条件下能执行、留下什么」。三条硬规矩正好落在
+% 三条边上，画出来比列出来好记。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdontology}{%
+\begin{tikzpicture}[x=1cm,y=1cm,
+  el/.style={rounded corners=2.6pt, line width=0.9pt, fill=white,
+             inner sep=4pt, align=center, font=\footnotesize, text=fdink,
+             minimum width=2.5cm, minimum height=1.2cm},
+  mdl/.style={el, draw=fdacc},      % 建模三要素
+  dlv/.style={el, draw=fdwarn},     % 交付四要素
+  ocap/.style={font=\scriptsize, text=fdmute, align=left}]
+
+  \node[mdl] (obj) at (4.0,-2.0) {{\bfseries 对象}\\[1pt]{\scriptsize 业务方嘴里的词}};
+  \node[dlv] (sta) at (0.9,-2.0) {{\bfseries 状态}\\[1pt]{\scriptsize 迁移条件}\\{\scriptsize 写得下来}};
+  \node[mdl] (rel) at (4.0,0.25) {{\bfseries 关系}\\[1pt]{\scriptsize 说得出在哪个}\\{\scriptsize 流程里用到}};
+  \node[mdl] (act) at (8.2,-2.0) {{\bfseries 动作}\\[1pt]{\scriptsize 人或 Agent}\\{\scriptsize 可以做什么}};
+  \node[dlv] (cri) at (6.6,-4.8) {{\bfseries 判据}\\[1pt]{\scriptsize 是 / 否，}\\{\scriptsize 不含「视情况」}};
+  \node[dlv] (per) at (9.8,-4.8) {{\bfseries 权限}\\[1pt]{\scriptsize 对得上}\\{\scriptsize 现有审批制度}};
+  \node[dlv] (evd) at (12.6,-2.0) {{\bfseries 证据}\\[1pt]{\scriptsize 谁在什么条件下}\\{\scriptsize 做了什么}};
+  \node[el, draw=none, fill=fdlilac] (biz) at (12.6,0.25)
+    {{\bfseries 业务系统}\\[1pt]{\scriptsize 工单 · 审批}};
+
+  \draw[fdedgea] (sta.east) -- (obj.west);
+  \draw[fdedgea, {Stealth[length=3.4pt]}-{Stealth[length=3.4pt]}] (obj.north) -- (rel.south);
+  \draw[fdedgea, line width=1.3pt] (obj.east) -- node[fdlaba, above] {①} (act.west);
+  \draw[fdedgea] (cri.north) -- node[fdlab, above, pos=0.72] {什么条件下允许} (act.south west);
+  \draw[fdedgea] (per.north) -- node[fdlaba, right, pos=0.66] {③} (act.south east);
+  \draw[fdedgea] (act.east) -- node[fdlab, above] {留下} (evd.west);
+  \draw[fdedgea] (act.north) -- node[fdlaba, above, pos=0.7] {②} (biz.west);
+
+  \node[ocap, anchor=north west, text width=4.2cm] at (0.0,-6.35)
+    {\textcolor{fdacc}{\bfseries ── 建模三要素}\\
+     对象 · 关系 · 动作。第 4 章 §4.4 就有，回答的是
+     「这个流程{\bfseries 能不能}被系统化建模」。};
+  \node[ocap, anchor=north west, text width=4.7cm] at (4.85,-6.35)
+    {\textcolor{fdwarn}{\bfseries ── 交付四要素}\\
+     状态 · 判据 · 权限 · 证据。它们不是建模问题，是交付问题 ——
+     建模之后{\bfseries 谁在什么条件下能执行、留下什么}。};
+  \node[ocap, anchor=north west, text width=4.7cm] at (9.65,-6.35)
+    {{\bfseries 第七要素接的是骨架的证据层。}
+     第 2 关写下「什么算对」，第 3 关跑出记录，第 4 关收敛成验收集 ——
+     没把证据建进模型的项目，到第 4 关会发现无据可验。};
+
+  \draw[fdthin] (0,-8.55) -- (14.35,-8.55);
+  \node[fdout, fill=fdmilk, anchor=north west, text width=13.9cm] at (0.15,-8.80)
+    {{\bfseries 三条硬规矩，正好落在图里三条边上}\\[2pt]
+     {\bfseries\color{fdacc}①} 必须有动词 —— 每个核心对象至少挂一个真实业务动作。一个都挂不上的对象，说明它在这个项目里没有用，删掉。\\
+     {\bfseries\color{fdacc}②} 动作必须写回 —— 只能显示在大屏上、进不了工单或审批的，闭环没有完成。写回是验收线，不是加分项。\\
+     {\bfseries\color{fdacc}③} 权限和对象、关系一起建 —— 留到最后补，会在模型建完之后才发现关键动作没人有权限执行，而这时候改的不是配置，是组织。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 18 · 上册第 8 章·三层评估集
+% 表格已经说清了「谁负责哪一层」，说不清的是三层各自怎么长大——
+% 而那恰恰是三者不能互相替代的原因。右边三条增长曲线是这张图的正事。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdevalsets}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south west] at (0.15,0.12)
+    {三层各回答一个问题};
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south west] at (9.60,0.12)
+    {规模怎么长 · 横轴是时间};
+
+  \foreach \i/\y/\nm/\q/\who in {%
+    1/0/{黄金集}/{系统整体达标了吗}/{{\bfseries 业务专家}主导标注，工程师只负责把流程做顺},
+    2/-2.35/{对抗集}/{会不会被极端或恶意输入打垮}/{安全或红队角色；没有专职红队时由交付工程师兼任},
+    3/-4.70/{回归集}/{修好的问题有没有再犯}/{{\bfseries 谁修复了故障，谁补一条用例}}}{
+    \node[fdask, anchor=north west, text width=8.4cm] (e\i) at (0.15,\y)
+      {{\bfseries\nm}\ \ {\color{fdmute}\q}\\[2pt]{\scriptsize\color{fdmute}\who}};
+    \fill[fdmilk, rounded corners=2.6pt] (9.60,\y) rectangle (14.35,\y-1.30);
+    \draw[fdthin] (10.00,\y-1.05) -- (14.00,\y-1.05);   % 横轴
+    \draw[fdthin] (10.00,\y-1.05) -- (10.00,\y-0.22);   % 纵轴
+  }
+  % 黄金集：基本持平，业务规则变了才阶跃一次
+  \draw[fdacc, line width=1.1pt]
+    (10.0,-0.78) -- (11.3,-0.78) -- (11.3,-0.63) -- (12.6,-0.63) -- (12.6,-0.48) -- (14.0,-0.48);
+  \node[fdcav, anchor=north west, text width=4.6cm] at (9.65,-1.35)
+    {50--100 条起步。业务规则变了才增补};
+  % 对抗集：持续增长，没有终态
+  \draw[fdacc, line width=1.1pt] plot[smooth, domain=0:4, samples=26]
+    (\x+10.0, {-3.40 - 0.00 + 0.92*(\x/4)*(0.40+0.60*(\x/4))});
+  \node[fdcav, anchor=north west, text width=4.6cm] at (9.65,-3.70)
+    {持续增长，{\bfseries 没有终态}};
+  % 回归集：随故障历史阶梯上升，永不删除
+  \draw[fdacc, line width=1.1pt]
+    (10.0,-5.75) -- (10.6,-5.75) -- (10.6,-5.56) -- (11.5,-5.56) -- (11.5,-5.37)
+    -- (12.3,-5.37) -- (12.3,-5.18) -- (13.2,-5.18) -- (13.2,-4.99) -- (14.0,-4.99);
+  \node[fdcav, anchor=north west, text width=4.6cm] at (9.65,-6.05)
+    {每修一次故障多一条，{\bfseries 永不删除}};
+
+  \node[fdout, fill=fdamber, anchor=north west, text width=13.9cm] at (0.15,-6.95)
+    {{\bfseries 黄金集的第一份交付物应该是一份标注一致性报告，不是一个评分数字。}
+     两个业务标注者对同一条数据经常给出相反判断，黄金集本身就不可信 ——
+     拿模型输出去和一份内部都对不齐的「标准答案」比对，比不比都没有意义，
+     {\bfseries 指标的上限已经被标注质量锁死了}。};
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.15,-8.25)
+    {对抗集的种子要从真实工单里挖，不要凭空设计：真实失败案例已经证明「这条路能打穿系统」，
+     设计出来但没验证过的攻击用例，很可能测的是一个根本不会发生的场景。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 19 · 上册第 9 章·撤得回来的和撤不回来的
+% 正文的主张是一个顺序反转：不是先定灰度比例再问出事怎么办，
+% 而是先看最底下那层有多重，再决定灰度放多大。箭头方向就是这个主张。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdrollback}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south west] at (1.15,0.12)
+    {AI 系统回滚，回的不止代码和数据};
+
+  \foreach \i/\y/\col/\lv/\nm/\how in {%
+    1/0/fdacc/{能撤}/{模型版本 · 提示词 · 配置}/{切回上一版，分钟级},
+    2/-1.65/fdwarn/{难撤}/{已经写回业务系统的数据}/{要有补偿动作，而且补偿本身也会留痕},
+    3/-3.30/fdstop/{撤不回来}/{人已经照着建议做了的事}/{已发出的通知 · 已批的单 · 已下的料 · 已答复的客户}}{
+    \fill[\col!14, rounded corners=2.6pt] (1.15,\y) rectangle (9.60,\y-1.40);
+    \draw[\col, line width=2.2pt] (1.15,\y) -- (1.15,\y-1.40);
+    \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (1.45,\y-0.12) {\nm};
+    \node[fdcav, anchor=north west, text width=7.6cm] at (1.45,\y-0.72) {\how};
+    \node[font=\bfseries\scriptsize, text=\col, anchor=north east] at (9.40,\y-0.12) {\lv};
+  }
+  % 左侧可逆性梯度
+  \shade[top color=fdacc!45, bottom color=fdstop!45, rounded corners=2pt]
+    (0.50,0) rectangle (0.88,-4.70);
+  \node[font=\scriptsize, text=fdmute, anchor=north west] at (0.36,-4.82) {可逆性};
+
+  % 顺序反转：从最底下那层反向决定灰度
+  \node[fdask, anchor=north west, text width=3.9cm, draw=fdstop] (gray) at (10.25,-1.10)
+    {{\bfseries 灰度放多大\\观察窗口多长}};
+  \draw[draw=fdstop, line width=1.1pt, -{Stealth[length=4pt]}]
+    (9.60,-4.00) -- (10.05,-4.00) |- (gray.south);
+  \node[fdcav, anchor=north west, text width=4.0cm] at (10.25,-2.45)
+    {{\bfseries\color{fdstop}顺序是反的。}常见做法是先定灰度比例，再问出事怎么办。
+     应该先问「这次放量期间如果它错了，哪些后果撤不回来」，
+     再用这个答案决定灰度放多大 —— 撤不回来的后果越重，第一档比例越小、观察窗口越长。};
+
+  \node[fdout, fill=fdrose, anchor=north west, text width=13.9cm] at (0.36,-5.35)
+    {{\bfseries 如果答案是「全都撤不回来」} —— 比如系统直接对外发通知、直接改客户账目 ——
+     那这一关根本不该从灰度开始，{\bfseries 应该先加一道人工复核，让「撤不回来」变成「发出去之前有人看过」}。};
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.36,-6.65)
+    {另一条：回滚脚本要在上线前的预生产环境完整跑过一次，记录耗时。这个耗时是你在事故中真正拥有的预算 ——
+     回滚要 40 分钟，「发现问题立刻回滚」这句话在业务方听来就是「再坏 40 分钟」。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 20 · 上册第 11 章·计价方式就是责任分配
+% 正文那句「范围写不清楚却签固定总价，和范围写得很清楚却按人天收费，
+% 是同一个错误的两个方向」，说的就是一条对角线。画成两轴图之后，
+% 这句话不用解释——两个错误落在对角线两侧的角上，一眼看得见。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdpricing}{%
+\begin{tikzpicture}[x=1cm,y=1cm,
+  pin/.style={rounded corners=2.6pt, draw=fdacc, line width=1.0pt, fill=white,
+              inner sep=4.5pt, align=center, font=\footnotesize, text=fdink}]
+  \def\PW{11.6}\def\PH{7.4}
+
+  % 匹配带（对角）
+  \fill[fdtint, opacity=0.8]
+    (0.0,-\PH+1.35) -- (1.35,-\PH) -- (\PW,-1.35) -- (\PW-1.35,0) -- cycle;
+  \node[font=\bfseries\scriptsize, text=fdacc] at (2.35,-4.35) {匹配带};
+
+  % 两个角：同一个错误的两个方向
+  \fill[fdrose, rounded corners=3pt] (0.12,-0.12) rectangle (3.55,-2.05);
+  \node[fdcav, anchor=north west, text width=3.05cm] at (0.32,-0.30)
+    {{\bfseries\color{fdstop}纯赌博}\\范围写不清楚，却签固定总价。需求膨胀全靠变更单硬扛};
+  \fill[fdrose, rounded corners=3pt] (\PW-3.55,-\PH+2.05) rectangle (\PW-0.12,-\PH+0.12);
+  \node[fdcav, anchor=north west, text width=3.05cm] at (\PW-3.35,-\PH+1.87)
+    {{\bfseries\color{fdstop}该收敛不收敛}\\范围写得很清楚，却按人天收费。工期越长收入越高，激励与交付方向相反};
+
+  % 坐标轴
+  \draw[fdline, line width=0.9pt, -{Stealth[length=4pt]}] (0,-\PH) -- (\PW+0.4,-\PH);
+  \draw[fdline, line width=0.9pt, -{Stealth[length=4pt]}] (0,-\PH) -- (0,0.4);
+  \node[font=\scriptsize, text=fdmute, anchor=north west] at (0,-\PH-0.15) {范围说不清，边做边定};
+  \node[font=\scriptsize, text=fdmute, anchor=north east] at (\PW+0.4,-\PH-0.15) {范围写得清，验收可判定};
+  \node[font=\bfseries\scriptsize, text=fdink, anchor=north] at (\PW/2,-\PH-0.62)
+    {横轴 ── 第 2 关定界做到了什么程度};
+  % 纵轴说明走左侧栏横排。CJK 不能 rotate=90，见文件头第 2 条。
+  \node[font=\scriptsize, text=fdmute, anchor=east] at (-0.25,-0.30) {风险落在乙方};
+  \node[font=\scriptsize, text=fdmute, anchor=east] at (-0.25,-\PH+0.30) {风险落在客户};
+  \node[font=\bfseries\scriptsize, text=fdink, anchor=east, align=right, text width=1.9cm]
+    at (-0.25,-\PH/2) {纵轴\\做砸了谁亏钱};
+
+  % 四种结构
+  \node[pin, text width=1.9cm] at (1.85,-6.55) {{\bfseries 人天}};
+  \node[pin, text width=2.5cm] at (5.7,-3.55) {{\bfseries 里程碑分期}\\[1pt]{\scriptsize 按节点切分}};
+  \node[pin, text width=2.2cm] at (9.9,-0.90) {{\bfseries 固定总价}};
+  \node[pin, text width=2.5cm, draw=fdwarn, fill=fdamber!35] (rs) at (9.9,-3.95)
+    {{\bfseries 效果分成}\\[1pt]{\scriptsize 双方共担}};
+  \draw[fdthin, dash pattern=on 1.4pt off 1.6pt] (9.9,-3.35) -- (9.9,-2.20);
+  \node[font=\scriptsize, text=fdwarn, anchor=west] at (10.3,-2.75) {不在对角线上};
+
+  \node[fdout, fill=fdamber, anchor=north west, text width=13.5cm] at (-2.3,-\PH-1.35)
+    {{\bfseries 效果分成为什么不在对角线上。}它要的确定性最高，风险却是共担 ——
+     所以它最容易写进方案 PPT，最难落进合同。三个障碍都不是靠诚意能解决的：\quad
+     {\bfseries 归因} 建不出干净的对照组就别谈分成。\quad
+     {\bfseries 预算科目} 既不是软件费也不是服务费，客户的科目体系里没有这个格子。\quad
+     {\bfseries 审计} 金额随业务波动的合同，举证责任在经办人身上 —— 业务负责人很想签，经办人也有充分理由不想签。};
+  \node[fdout, fill=fdmilk, anchor=north west, text width=13.5cm] at (-2.3,-\PH-3.15)
+    {{\bfseries 一句话检验。}拿到一份合同问：如果这个系统上线后没人用，我们这边会少收多少钱？\ 
+     答案是「一分不少」，那么无论方案里怎么写「我们对业务结果负责」，
+     {\bfseries 这份合同里的责任其实还在客户那边}。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 21 · 上册第 14 章·沉淀的边界
+% 上半是三层的可管理程度，第三层那两个空格就是这一节存在的理由。
+% 下半是抽象层级测试——它是个筛子，所以画成筛子。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdcarryover}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south west] at (0.15,0.12)
+    {驻场交付会接触到三类东西，可管理程度差得很远};
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south] at (9.85,0.12) {有制度管吗};
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south] at (12.65,0.12) {出事能追吗};
+
+  \foreach \i/\y/\h/\nm/\what/\gov/\tr/\col in {%
+    1/0/1.20/{数据}/{生产数据 · 工单 · 客户名单 · 日志}/{有}/{能}/fdacc,
+    2/-1.35/1.20/{代码与文档}/{交付的代码 · 配置 · 方案 · 接口文档}/{有}/{能}/fdacc,
+    3/-2.70/1.75/{现场认知}/{哪个参数超过某个值就会出问题 · 哪个流程有个所有人都知道但没写下来的例外 · 哪张表的数据其实不可信}/{几乎没有}/{基本不能}/fdstop}{
+    \fill[\col!12, rounded corners=2.6pt] (0.15,\y) rectangle (8.55,\y-\h);
+    \draw[\col, line width=2.2pt] (0.15,\y) -- (0.15,\y-\h);
+    \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.42,\y-0.12) {\nm};
+    \node[fdcav, anchor=north west, text width=5.9cm] at (2.35,\y-0.12) {\what};
+    \node[font=\bfseries\footnotesize, text=\col, anchor=north] at (9.85,\y-0.42) {\gov};
+    \node[font=\bfseries\footnotesize, text=\col, anchor=north] at (12.65,\y-0.42) {\tr};
+  }
+  \node[fdcav, anchor=north west, text width=5.5cm] at (8.85,-4.05)
+    {{\bfseries\color{fdstop}第三层两头都不成立：}它不是数据，所以没法脱敏；
+     它没有载体，所以拿不出证据说你带走了什么。而做得越好，这一层积累得越多 ——
+     这不是「不专业的 FDE 才会有的问题」。};
+
+  % 抽象层级测试：一个筛子
+  \node[fdout, fill=fdamber, anchor=north west, text width=8.2cm] at (0.15,-4.85)
+    {{\bfseries 一条当场能用的判据 —— 抽象层级测试}\\[2pt]
+     不要问「这算不算商业秘密」，那是律师的活，而且要等纠纷发生才有答案。问这一句：\\[3pt]
+     {\bfseries 把这段东西原样交给这个客户的直接竞争对手，他能不能因此少走弯路？}};
+
+  \draw[fdedgea] (2.3,-6.90) -- (2.3,-7.42);
+  \draw[fdedgea] (6.5,-6.90) -- (6.5,-7.42);
+  \node[fdlab, anchor=east] at (2.22,-7.16) {不能};
+  \node[fdlab, anchor=west] at (6.58,-7.16) {能};
+
+  \node[font=\bfseries\footnotesize, text=fdacc, anchor=north west] at (0.15,-7.48)
+    {可以沉淀 ── 这是方法};
+  \node[font=\bfseries\footnotesize, text=fdstop, anchor=north west] at (7.35,-7.48)
+    {不能带走 ── 这是别人的家底};
+  \foreach \i/\y/\lft/\rgt in {%
+    1/-8.05/{一段增量同步的代码骨架}/{这个客户那张主数据表里哪几个字段实际不可信},
+    2/-8.80/{评估集该怎么组织、怎么分层}/{评估集里那 200 条真实工单},
+    3/-9.55/{「用滚动基线比绝对阈值更稳」这条经验}/{这条产线上那组具体阈值},
+    4/-10.30/{某类遗留系统的接入模式}/{这家客户为什么当年选了这个架构、内部谁在保它}}{
+    \node[fdout, fill=fdtint, anchor=north west, text width=6.5cm] at (0.15,\y) {\lft};
+    \node[fdout, fill=fdrose, anchor=north west, text width=6.5cm] at (7.35,\y) {\rgt};
+  }
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.15,-11.20)
+    {两栏的分界线不是「有没有写下来」，是{\bfseries 抽象层级}。同一件事写在不同抽象层级上，
+     一边是可复用的方法，一边是别人的家底。\ 
+     {\bfseries 而抽象是要花时间的} —— 把右栏改写成左栏，比直接归档原始笔记费事得多。
+     所以这件事必须排进工期：不排工期，团队就会选那个省事的做法，而省事的做法恰好是越界的那个。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 22 · 下册第 9 章·三类漂移
+% 「分数掉了」底下是三种完全不同的成因，处置代价差一个量级。
+% 这是那种非画不可的图：三类的区别就是分布图上三种不同的动法，
+% 文字怎么写都不如三张小图并排放着清楚。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fddrift}{%
+\begin{tikzpicture}[x=1cm,y=1cm,
+  ax/.style={draw=fdline, line width=0.7pt},
+  old/.style={draw=fdmute, line width=1.0pt},
+  new/.style={draw=fdacc, line width=1.1pt, dash pattern=on 2.2pt off 1.6pt},
+  bd/.style={draw=fdstop, line width=0.9pt, dash pattern=on 1.6pt off 1.4pt}]
+
+  \foreach \i/\x/\ttl/\en in {%
+    1/0.00/{协变量偏移}/{covariate shift},
+    2/4.85/{先验偏移}/{prior probability shift},
+    3/9.70/{概念偏移}/{concept shift}}{
+    \draw[rounded corners=3pt, draw=fdline, line width=0.7pt, fill=fdmilk]
+      (\x,0) rectangle (\x+4.5,-3.3);
+    \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (\x+0.28,-0.16) {\ttl};
+    \node[font=\scriptsize, text=fdmute, anchor=north west] at (\x+0.28,-0.66) {\en};
+    \draw[ax] (\x+0.5,-2.85) -- (\x+4.15,-2.85);
+  }
+
+  % 一、协变量偏移：输入分布整体平移，判据线没动
+  \draw[old, smooth, samples=40, domain=0:3.5]
+    plot (\x+0.5, {-2.85 + 1.05*exp(-(\x-1.05)*(\x-1.05)/0.42)});
+  \draw[new, smooth, samples=40, domain=0:3.5]
+    plot (\x+0.5, {-2.85 + 1.05*exp(-(\x-2.45)*(\x-2.45)/0.42)});
+  \draw[bd] (2.55,-2.95) -- (2.55,-1.40);
+  \draw[fdedgea, line width=0.8pt] (1.55,-1.18) -- (2.95,-1.18);
+  \node[font=\scriptsize, text=fdstop, anchor=north] at (2.55,-2.98) {判据没动};
+
+  % 二、先验偏移：类别占比变了，问题本身没变
+  \foreach \k/\dx/\ho/\hn in {1/0.55/1.20/0.32, 2/1.55/0.32/1.20, 3/2.55/0.52/0.52}{
+    \fill[fdmute!45] (4.85+\dx,-2.85) rectangle (4.85+\dx+0.42,-2.85+\ho);
+    \fill[fdacc!55] (4.85+\dx+0.48,-2.85) rectangle (4.85+\dx+0.90,-2.85+\hn);
+  }
+  \node[font=\scriptsize, text=fdmute, anchor=north] at (7.1,-2.98) {某类工单占比 5\% → 30\%};
+
+  % 三、概念偏移：分布没动，映射本身变了
+  \draw[old, smooth, samples=40, domain=0:3.5]
+    plot (\x+10.2, {-2.85 + 1.05*exp(-(\x-1.75)*(\x-1.75)/0.55)});
+  \draw[bd] (11.60,-2.95) -- (11.60,-1.40);
+  \draw[bd, draw=fdacc] (13.10,-2.95) -- (13.10,-1.40);
+  \draw[fdedgea, line width=0.8pt, draw=fdstop] (11.70,-1.18) -- (13.00,-1.18);
+  \node[font=\scriptsize, text=fdstop, anchor=north] at (12.35,-2.98) {判据本身移了};
+
+  % 三段处置
+  \foreach \i/\x/\col/\dz/\note in {%
+    1/0.00/fdacc/{输入端补数据、扩检索覆盖面}/{判据没错，是没见过},
+    2/4.85/fdwarn/{重新标定阈值与类别权重}/{{\bfseries 别急着改模型}},
+    3/9.70/fdstop/{必须重做标注}/{{\bfseries 补数据没用，因为旧标注现在是错的}}}{
+    \node[fdout, fill=\col!16, anchor=north west, text width=4.1cm] at (\x+0.2,-3.70)
+      {{\bfseries\color{\col}\dz}\\[1.5pt]\note};
+  }
+  \node[fdcav, anchor=north east] at (14.35,-5.20)
+    {实线 ── 旧分布　　虚线 ── 新分布};
+
+  \node[fdout, fill=fdamber, anchor=north west, text width=13.9cm] at (0.15,-5.60)
+    {{\bfseries 一个当场能用的区分办法：}拿一批新时段的样本，让人按{\bfseries 现在}的业务规则重新标一遍，
+     再和当初的标注比 —— 结论大面积对不上，是概念偏移；结论一致、只是新样本在训练集里找不到相似的，
+     是协变量偏移；两者都没有、只是某几类占比变了，是先验偏移。};
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.15,-7.00)
+    {{\bfseries 为什么值得先分类再上工具。}PSI 这类统计量测的是分布距离，它能告诉你「变了」，
+     告诉不了你「变的是哪一层」—— 而三类的处置代价差了一个量级：协变量偏移补一批数据就行，
+     概念偏移要重做标注、重建黄金集。常见的误判是把概念偏移当成协变量偏移，
+     于是不停地补数据、不停地不见效，因为补进来的数据用的还是旧标注口径。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 23 · 下册第 7 章·上下文预算
+% 正文描述的是一条连锁反应：对话历史线性增长 → 挤占检索结果配额 →
+% 检索结果被迫截断 → 回答质量随对话变长而悄悄下滑。
+% 两条预算条上下一摆，这条连锁反应就不用讲了。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdctxbudget}{%
+\begin{tikzpicture}[x=1cm,y=1cm,
+  seg/.style={rounded corners=1.6pt},
+  tick/.style={draw=fdline, line width=0.5pt}]
+
+  \node[font=\bfseries\footnotesize, text=fdacc, anchor=south west] at (0.35,0.15)
+    {设计时 —— 每类消费者都有上限，不能相互抢占};
+  \foreach \i/\x/\w/\col in {1/0.35/1.09/fdmute, 2/1.44/6.80/fdacc,
+                             3/8.24/3.67/fdwarn, 4/11.91/2.04/fdlilac}{
+    \fill[\col!30, seg] (\x,0) rectangle (\x+\w,-0.95);
+    \draw[\col!70, line width=0.6pt, seg] (\x,0) rectangle (\x+\w,-0.95);
+  }
+  \node[font=\bfseries\footnotesize, text=fdink] at (4.84,-0.34) {检索结果 · RAG 上下文};
+  \node[font=\scriptsize, text=fdmute] at (4.84,-0.71) {40--60\%};
+  \node[font=\bfseries\footnotesize, text=fdink] at (10.07,-0.34) {对话历史};
+  \node[font=\scriptsize, text=fdmute] at (10.07,-0.71) {20--35\%};
+  % 窄条的标签挂到条外用引线勾：横排放不进 1.1cm 宽的格子，
+  % 而竖排是不许用的（CJK 不能 rotate，见文件头第 2 条）。
+  \draw[tick] (0.90,-0.95) -- (0.90,-1.18);
+  \node[font=\scriptsize, text=fdmute, anchor=north] at (0.90,-1.16) {系统指令 5--10\%};
+  \draw[tick] (12.93,-0.95) -- (12.93,-1.18);
+  \node[font=\scriptsize, text=fdmute, anchor=north] at (12.93,-1.16) {输出预留 10--15\%};
+  \node[fdcav, anchor=north west, text width=13.6cm] at (0.35,-1.72)
+    {按 32K 窗口粗分：系统指令 2K--3K，检索结果 13K--19K，对话历史 6K--11K，输出预留 3K--5K。
+     数字为示意，不是某个特定模型的实测值。};
+
+  \node[font=\bfseries\footnotesize, text=fdstop, anchor=south west] at (0.35,-3.20)
+    {十几轮之后 —— 对话历史没有滚动窗口};
+  \foreach \i/\x/\w/\col in {1/0.35/1.09/fdmute, 2/1.44/2.99/fdacc,
+                             3/4.43/7.48/fdwarn, 4/11.91/2.04/fdlilac}{
+    \fill[\col!30, seg] (\x,-3.35) rectangle (\x+\w,-4.30);
+    \draw[\col!70, line width=0.6pt, seg] (\x,-3.35) rectangle (\x+\w,-4.30);
+  }
+  \draw[fdstop, line width=1.1pt, seg] (1.44,-3.35) rectangle (4.43,-4.30);
+  \node[font=\bfseries\footnotesize, text=fdstop] at (2.93,-3.69) {检索结果};
+  \node[font=\scriptsize, text=fdstop] at (2.93,-4.06) {被挤到截断};
+  \node[font=\bfseries\footnotesize, text=fdink] at (8.17,-3.69) {对话历史};
+  \node[font=\scriptsize, text=fdmute] at (8.17,-4.06) {随轮次线性增长，没有上限};
+  \draw[tick] (0.90,-4.30) -- (0.90,-4.53);
+  \node[font=\scriptsize, text=fdmute, anchor=north] at (0.90,-4.51) {系统指令};
+  \draw[tick] (12.93,-4.30) -- (12.93,-4.53);
+  \node[font=\scriptsize, text=fdmute, anchor=north] at (12.93,-4.51) {输出预留};
+  \node[font=\bfseries\scriptsize, text=fdstop, anchor=north] at (2.93,-4.51)
+    {先挤的就是它};
+
+  \node[fdout, fill=fdrose, anchor=north west, text width=13.6cm] at (0.35,-5.15)
+    {{\bfseries 为什么被挤的总是检索结果：}系统指令和输出预留是硬性下限，不会主动让步。
+     所以「对话历史要有滚动窗口或摘要机制」不是锦上添花的优化项，
+     是长对话场景下{\bfseries 防止检索质量隐性劣化的必要设计}。\\[2.5pt]
+     用户感知到的是「这个助手聊着聊着就变笨了」，根因其实是预算没设计。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 24 · 上册第 1 章·四家公司，四种答案
+% 上半是组织答案的对照，下半是官方披露的薪酬区间。
+% 薪酬那条轴只画官方一手数据——OpenAI 那格是空的，不是漏了，
+% 是它官方招聘页确实没有薪酬板块，而网上流传的数字本书不采信。
+% 空着比填个二手数字诚实，这一格本身就是这一章的论点之一。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdfourcos}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[fdout, fill=fdpale, anchor=north west, text width=13.9cm] at (0.15,0.9)
+    {{\bfseries 行业还没有对这个岗位形成统一标准。}去这几家投简历或面试，
+     不能假设职责描述通用，{\bfseries 必须逐条读招聘启事}。};
+
+  \foreach \i/\x/\co/\ans/\mean in {%
+    1/0.15/{OpenAI}/{头衔原封不动照搬}/{成功指标不是「交付完成」，是{\bfseries 生产环境里被真正用起来}。差旅比例最高 50\%，硬性要求},
+    2/3.70/{Anthropic}/{拆成两条独立序列}/{Applied AI Engineer 偏工程实现，Applied AI Architect 偏售前。任职要求与汇报关系都不同},
+    3/7.25/{Scale AI}/{强调「两栖」}/{初期偏重企业工程，但{\bfseries 每个人都要在部署工程和应用 AI 两个方向上发展出专长}},
+    4/10.80/{Databricks}/{两个头衔并存，写明「可计费」}/{这个岗位的工时可以{\bfseries 直接算进客户合同}，是收入的一部分}}{
+    \fill[fdmilk, rounded corners=3pt] (\x,-0.35) rectangle (\x+3.4,-3.35);
+    \draw[fdacc, line width=2pt] (\x,-0.35) -- (\x+3.4,-0.35);
+    \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (\x+0.25,-0.50) {\co};
+    \node[font=\scriptsize, text=fdacc, anchor=north west, text width=2.95cm, align=left]
+      at (\x+0.25,-1.02) {\ans};
+    \draw[fdthin] (\x+0.25,-1.72) -- (\x+3.15,-1.72);
+    \node[fdcav, anchor=north west, text width=2.95cm] at (\x+0.25,-1.82) {\mean};
+  }
+
+  % ── 官方披露的薪酬区间 ────────────────────────────────
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.15,-3.80)
+    {官方一手披露的年薪区间（美元）};
+  \node[fdcav, anchor=north east, text width=5.6cm] at (14.35,-3.78)
+    {只画官方招聘页披露的区间。聚合平台与招聘中介博客的二手数字，本书不采信。};
+  \def\SX{3.55}\def\SK{0.505}     % 起点与每万美元的宽度
+  \foreach \v in {15,20,25,30}{
+    \draw[fdthin] ({\SX+(\v-13)*\SK},-5.35) -- ({\SX+(\v-13)*\SK},-9.50);
+    \node[font=\scriptsize, text=fdmute, anchor=south] at ({\SX+(\v-13)*\SK},-5.30) {\v\,万};
+  }
+  \foreach \i/\y/\nm/\lo/\hi/\col/\src in {%
+    1/-5.55/{Palantir · FDAE}/13.5/20/fdmute/{官方招聘页，另加股票与签约奖金},
+    2/-6.25/{Anthropic · Applied AI Engineer}/20/32/fdacc/{偏工程实现},
+    3/-6.95/{Anthropic · Applied AI Architect}/24/31.5/fdwarn/{偏售前},
+    4/-7.65/{Scale AI · Frontier Agent Eng.}/18/22.5/fdmute/{依据美国劳工部薪酬透明度条款},
+    5/-8.35/{Databricks · FDE}/15.29/21.0155/fdmute/{两份启事区间完全一致}}{
+    \node[font=\scriptsize, text=fdink, anchor=east] at (\SX-0.15,\y-0.17) {\nm};
+    \fill[\col!45, rounded corners=1.4pt]
+      ({\SX+(\lo-13)*\SK},\y) rectangle ({\SX+(\hi-13)*\SK},\y-0.34);
+    \node[font=\scriptsize, text=fdmute, anchor=west] at ({\SX+(\hi-13)*\SK+0.12},\y-0.17) {\src};
+  }
+  \node[font=\scriptsize, text=fdink, anchor=east] at (\SX-0.15,-9.22) {OpenAI · FDE};
+  \draw[fdstop, line width=0.7pt, dash pattern=on 1.6pt off 1.6pt, rounded corners=1.4pt]
+    ({\SX},-9.05) rectangle ({\SX+9.6},-9.39);
+  \node[font=\scriptsize, text=fdstop] at ({\SX+4.8},-9.22) {官方招聘页没有薪酬透明度板块 —— 这一格本书留空};
+
+  \node[fdout, fill=fdamber, anchor=north west, text width=13.9cm] at (0.15,-9.90)
+    {{\bfseries 这组数字有个反直觉的地方：}Anthropic 偏售前那条路径，薪酬上限（31.5 万）
+     比偏工程的（32 万）只低 5 千，{\bfseries 下限（24 万）反而高出 4 万}。
+     在这家公司的定价逻辑里，「能不能说服客户买单、能不能在复杂采购流程里站住技术话语权」，
+     市场价格并不低于「能不能亲手写代码交付」——
+     {\bfseries 这条直接反驳了「这个岗位的价值只体现在代码产出上」这种偏见}。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 25 · 上册第 2 章·失速集中在三个位置
+% 六道关不是均匀出事的。把三处钉在关卡轨上，比列三段文字更快看出
+% 「混着用只会让项目卡得更久」这句话的分量——三处的重启动作互不通用。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdstall}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \foreach \i/\x/\nm/\bad in {1/0.00/选题/0, 2/2.42/定界/1, 3/4.84/切片/0,
+                              4/7.26/验收/1, 5/9.68/上线/0, 6/12.10/采用/1}{
+    \ifnum\bad=1
+      \fill[fdrose, rounded corners=3pt, draw=fdstop, line width=1.0pt]
+        (\x,0) rectangle (\x+2.05,1.35);
+    \else
+      \fill[white, rounded corners=3pt, draw=fdline, line width=0.8pt]
+        (\x,0) rectangle (\x+2.05,1.35);
+    \fi
+    \node[font=\scriptsize, text=fdmute, anchor=north] at (\x+1.025,1.24) {第 \i\ 关};
+    \node[font=\bfseries\footnotesize, text=fdink, anchor=south] at (\x+1.025,0.22) {\nm};
+    \coordinate (t\i) at (\x+1.025,0);
+  }
+  \foreach \x in {2.05,4.47,6.89,9.31,11.73}{
+    \draw[fdedgea, line width=0.7pt] (\x+0.06,0.68) -- (\x+0.30,0.68);
+  }
+  \node[font=\bfseries\scriptsize, text=fdstop, anchor=west] at (0.15,1.72)
+    {失速不是随机分布的，集中在三个位置 —— 三处的识别信号和重启动作各不相同，混着用只会让项目卡得更久};
+
+  \foreach \i/\x/\g/\sig/\act in {%
+    1/0.15/2/{范围文档反复改却始终没进签字流程；还在讨论「要不要做」，而不是「怎么衡量做没做到」}/{先逼出一个决定，三选一，没有第四个：{\bfseries 继续 · 重新定界（走变更单）· 终止（出最终发票）}},
+    2/4.85/4/{验收标准反复推翻重写，停在「模型输出质量要好」这类不可测表述；没有真实历史失败案例}/{改用分版本的质量等级写法；评估集起步 {\bfseries 20--50 条真实}历史失败案例；逐条过「都看得懂 · 陈述简短 · 易验证」},
+    3/9.55/6/{官方使用数据很低，安全日志里全是个人 AI 工具流量；人工改写率不降，或根本没人跟踪}/{重新筛种子用户（相关性 · 活跃度 · 影响力）；种子用户运营{\bfseries 写进项目计划}，预留每周 5--10\% 工时}}{
+    \draw[fdstop, line width=0.9pt, -{Stealth[length=3.4pt]}] (t\g) -- (t\g|-0,-0.55);
+    \fill[fdrose!45, rounded corners=3pt] (\x,-0.60) rectangle (\x+4.35,-4.55);
+    \node[font=\bfseries\footnotesize, text=fdstop, anchor=north west] at (\x+0.22,-0.72)
+      {卡在第 \g\ 关};
+    \node[font=\bfseries\scriptsize, text=fdink, anchor=north west] at (\x+0.22,-1.26) {信号};
+    \node[fdcav, anchor=north west, text width=3.95cm] at (\x+0.22,-1.60) {\sig};
+    \node[font=\bfseries\scriptsize, text=fdink, anchor=north west] at (\x+0.22,-2.85) {重启动作};
+    \node[fdcav, anchor=north west, text width=3.95cm] at (\x+0.22,-3.19) {\act};
+  }
+
+  \node[fdout, fill=fdmilk, anchor=north west, text width=13.9cm] at (0.15,-5.05)
+    {{\bfseries 三种失速的共同底层逻辑，先问这一句：卡住的是「标准没定下来」，还是「标准定了但没人执行」？}};
+  \node[fdout, fill=fdtint, anchor=north west, text width=6.75cm] at (0.15,-6.15)
+    {{\bfseries 标准没定下来} —— 回到对应关卡重新谈。在下一关死磕话术没有用。};
+  \node[fdout, fill=fdamber, anchor=north west, text width=6.75cm] at (7.75,-6.15)
+    {{\bfseries 定了但没人执行} —— 要查的是运营节奏和问责机制，不是重写一遍文档。};
+  \draw[fdedgea] (3.5,-5.75) -- (3.5,-6.15);
+  \draw[fdedgea] (11.1,-5.75) -- (11.1,-6.15);
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 26 · 上册第 3 章·四个陷阱，以及它们各自的证据强度
+% 这一章的特别之处是它给自己的每一条都标了证据强度：第一条有同行评审
+% 论文，最后一条连术语都是本书新造的。把强度画成一条递减的条，
+% 读者就知道哪几条经得起引用、哪几条只能当经验看——
+% 这件事列在文字里会被跳过，画出来跳不过去。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdtraps}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south west] at (0.15,0.12)
+    {四个陷阱，按本书能拿出的证据强度从强到弱排};
+
+  \foreach \i/\x/\nm/\sym/\act/\ev/\evtxt/\col in {%
+    1/0.15/{英雄主义陷阱}/{某个人一次次在最危急的时刻把系统拉回来，晋升理由也偏向「扛过了那次故障」}/{把「防止问题发生」也纳入可见的绩效叙事；用 bus factor 推动知识沉淀；审查晋升标准里英雄事迹与预防性工作的权重}/{1.00}/{两篇同行评审论文支撑，可以说「研究表明」}/fdacc,
+    2/3.70/{演示幸存者偏差}/{会议室里演示行云流水，客户当场拍板，投产三个月却卡在生产环境上不了线}/{立项阶段就用生产数据（哪怕脱敏子集）做验证；把「生产边界情况下还成立吗」做成 demo 后的强制追问}/{0.70}/{现象有一手材料，但流传的失败率溯源存疑 —— 本节只做定性论述}/fdacc,
+    3/7.25/{销售工程师陷阱}/{日程被互不相关领域的演示排满，你在念产品功能清单，而不是追问业务问题}/{不是拒绝做演示，是{\bfseries 主动补上销售没做的资格评估}：把产品介绍改造成用三个核心问题筛客户}/{0.42}/{只有从业者经验，没有研究。本节不出现「研究表明」}/fdwarn,
+    4/10.80/{定制化债务陷阱}/{每接一个新客户就开一个分支，同一个功能在不同客户那里有三四份实现}/{建立「模式抽取」机制定期审查跨客户定制；用服务收入占比与服务毛利当预警指标}/{0.22}/{四个里论证最弱。英文世界没有对应术语，这个名字是本书新造的}/fdstop}{
+    \fill[fdmilk, rounded corners=3pt] (\x,0) rectangle (\x+3.40,-7.85);
+    \draw[\col, line width=2.2pt] (\x,0) -- (\x+3.40,0);
+    \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (\x+0.25,-0.14) {\nm};
+    \node[font=\bfseries\scriptsize, text=fdmute, anchor=north west] at (\x+0.25,-0.70) {症状};
+    \node[fdcav, anchor=north west, text width=2.95cm] at (\x+0.25,-1.04) {\sym};
+    \draw[fdthin] (\x+0.25,-2.85) -- (\x+3.15,-2.85);
+    \node[font=\bfseries\scriptsize, text=fdmute, anchor=north west] at (\x+0.25,-2.96) {纠偏动作};
+    \node[fdcav, anchor=north west, text width=2.95cm] at (\x+0.25,-3.30) {\act};
+    \draw[fdthin] (\x+0.25,-5.55) -- (\x+3.15,-5.55);
+    \node[font=\bfseries\scriptsize, text=\col, anchor=north west] at (\x+0.25,-5.66) {证据强度};
+    \fill[fdline!60, rounded corners=1.2pt] (\x+0.25,-6.22) rectangle (\x+3.15,-6.46);
+    \fill[\col, rounded corners=1.2pt] (\x+0.25,-6.22) rectangle ({\x+0.25+2.90*\ev},-6.46);
+    \node[fdcav, anchor=north west, text width=2.95cm] at (\x+0.25,-6.58) {\evtxt};
+  }
+
+  \node[fdout, fill=fdamber, anchor=north west, text width=13.9cm] at (0.15,-8.35)
+    {{\bfseries 这条强度轴不是排版装饰，是读法说明。}第一条可以放心说「研究表明」；
+     第二条只能做定性论述，引用失败率数字一律不采信；第三条只有从业者经验；
+     第四条连术语都是新造的，实证材料只有一条服务毛利结构的行业基准，
+     衡量的还是财务结果，不是「按客户分叉」这个技术行为本身。
+     {\bfseries 越往右，读的时候折扣要打得越狠。}};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 27 · 上册第 4 章·七种需求错位，各配一件识别工具
+% 这张图真正的信息在右边那一列：六种错位都能靠 4.2–4.6 的访谈工具挖出来，
+% 第七种不行——预算驱动的立项，跟谁聊都聊不出来，只能看时间线和空缺。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdmismatch}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south west] at (0.15,0.12)
+    {七种错位};
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south west] at (9.35,0.12)
+    {用哪件工具能识别出来};
+
+  \foreach \i/\y/\nm/\desc in {%
+    1/0/{解决方案伪装成需求}/{客户说「我们需要一个按钮 / 一套 AI 系统」—— 说的是解决方案，不是问题},
+    2/-1.10/{局部最优掩盖全局问题}/{某部门优化自己这一段，把问题转嫁给下游},
+    3/-2.20/{领导需求 vs 一线需求冲突}/{两边都以为自己说的是「标准流程」},
+    4/-3.30/{历史包袱被当成规则}/{追问到底，理由是「一直都是这样做的」},
+    5/-4.40/{想要 AI 但真问题是流程}/{上 AI 只是在给一个坏流程加速},
+    6/-5.50/{KPI 驱动的伪需求}/{要的是让某个指标好看，不关心结果对不对},
+    7/-6.60/{预算驱动的立项}/{需求不是从痛点长出来的，是从一笔必须花掉的预算长出来的}}{
+    \node[fdnum] (m\i) at (0.35,\y-0.42) {\i};
+    \node[fdout, fill=fdmilk, anchor=north west, text width=7.6cm] (r\i) at (0.85,\y)
+      {{\bfseries\nm}\ \ {\color{fdmute}\desc}};
+  }
+
+  \foreach \i/\y/\tl/\sec in {%
+    1/-0.05/{laddering 三句模板}/{§4.6 提问工具箱},
+    2/-1.35/{服务蓝图}/{§4.4 工作流拆解},
+    3/-2.65/{影子跟随 ＋ 流程挖掘}/{§4.3 · §4.5},
+    4/-3.95/{五个为什么}/{§4.6 提问工具箱}}{
+    \node[fdcard, draw=fdacc, anchor=north west, minimum width=4.6cm, font=\scriptsize]
+      (w\i) at (9.55,\y) {{\bfseries\tl}};
+    \node[font=\scriptsize, text=fdmute, anchor=north west] at (9.70,\y-0.62) {\sec};
+  }
+  \node[fdcard, draw=fdstop, fill=fdrose, anchor=north west, minimum width=4.6cm,
+        font=\scriptsize] (w5) at (9.55,-5.85) {{\bfseries 这一种，跟谁聊都聊不出来}};
+  \node[fdcav, anchor=north west, text width=4.4cm] at (9.70,-6.47)
+    {不是访谈，是看时间线和几个空缺：立项集中在四季度；初验日期卡死在 12 月 31 日之前且不接受延期；问「上线后谁来用」答不出具体的人名或部门};
+
+  \draw[fdedgea] (r1.east) -- (w1.west);
+  \draw[fdedgea] (r6.east) -- ++(0.35,0) |- (w1.west);
+  \draw[fdedgea] (r2.east) -- ++(0.55,0) |- (w2.west);
+  \draw[fdedgea] (r5.east) -- ++(0.55,0) |- (w2.west);
+  \draw[fdedgea] (r3.east) -- (w3.west);
+  \draw[fdedgea] (r5.east) -- ++(0.75,0) |- (w3.west);
+  \draw[fdedgea] (r4.east) -- (w4.west);
+  \draw[draw=fdstop, line width=0.9pt, -{Stealth[length=3.4pt]}] (r7.east) -- (w5.west);
+
+  \node[fdout, fill=fdamber, anchor=north west, text width=13.9cm] at (0.15,-8.60)
+    {{\bfseries 预算驱动的立项，识别出来之后不是掉头就走。}钱是真的，合同也是真的，该变的是资源分配：
+     一线工作流的深度优化优先级下调（这套东西大概率不会有人天天用）；
+     验收材料、合规流程、汇报口径的完整度优先级上调。
+     {\bfseries 并且在第 2 关定界阶段就把话挑明：这一期的目标是过验收，采用率不写进这一期的验收标准。}
+     这类项目的合同终点在第 4 关，不在第 6 关。};
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.15,-10.25)
+    {七种错位不互斥，同一个需求经常同时踩中两三种。一个「要一套自动审批系统」的需求，
+     追下去可能同时是①和⑥ —— 前者的真问题是审批人不够，后者是管理层在考核审批时效这个单一指标。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 28 · 上册第 5 章·三类条款怎么写才守得住
+% 惯例写法没门槛，出问题时被翻出来对质的是具体程度。
+% 所以这张图的正事在中间那一行和右边那一行的对照。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdclauses}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south west] at (0.15,0.12)
+    {惯例本身没什么门槛。真正决定条款能不能守住的，是有没有把它写成一个可执行的动作};
+
+  \foreach \i/\x/\nm/\guard/\weak/\firm in {%
+    1/0.15/{范围外条款}/{守的是「顺水推舟的扩权」}/{「本项目范围如下，以下内容不在范围内」—— 绕弯子，而且只排除了不相关的东西}/{{\bfseries 本项目不涵盖以下功能或交付物：}先亮出这一句再逐条列。并且写明：{\bfseries 即使它们能和本服务互相配合}，未写明的一并排除},
+    2/4.90/{假设条款}/{守的是「前提变了怎么办」}/{只列「数据要可得」「干系人要配合」这类前提，然后就没有然后了}/{{\bfseries 第一条不写前提，写流程：}本协议的任何变更都将使用项目变更请求表记录。等于提前告诉客户 —— 假设不成立时走的是这张表，不是一场争吵},
+    3/9.65/{依赖条款}/{守的是「延误了责任在谁」}/{「依赖客户配合提供数据」—— 依赖对象是抽象的「客户」，谁都可以不是那个人}/{点名到具体主体和具体动作：{\bfseries 依赖客户方 IT 部门或数据仓库供应商在【具体时限】内开通【具体系统】的只读访问权限}}}{
+    \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (\x,0)
+      {\nm};
+    \node[font=\scriptsize, text=fdacc, anchor=north west, text width=4.4cm] at (\x,-0.52)
+      {\guard};
+    \node[fdout, fill=fdrose, anchor=north west, text width=4.15cm] at (\x,-1.20)
+      {{\bfseries\color{fdstop}写空洞了}\\[1.5pt]\weak};
+    \node[fdout, fill=fdtint, anchor=north west, text width=4.15cm] at (\x,-3.35)
+      {{\bfseries\color{fdacc}写得守得住}\\[1.5pt]\firm};
+    \draw[fdedgea] (\x+2.28,-3.02) -- (\x+2.28,-3.35);
+  }
+
+  \node[fdout, fill=fdrose, anchor=north west, text width=13.9cm] at (0.15,-6.10)
+    {{\bfseries 一条可以当场判死的红线：依赖条款里出现「由各方协商」这五个字，基本可以判定这一条守不住。}
+     在总分包结构里，这五个字等于{\bfseries「由最没有话语权的那一方兜底」}。
+     做分包时，依赖条款要点名的是总包，不是「客户」—— 老旧数据库的驱动适配、内网网闸的开通审批、
+     第三方中间件缺陷的定责，每一类都要具名归属到人或部门，而不是笼统写一句「不含系统集成」。};
+  \node[fdout, fill=fdamber, anchor=north west, text width=13.9cm] at (0.15,-7.85)
+    {{\bfseries 比条款写得详细更重要的一个动作：让客户书面确认假设成立。}
+     一份政府咨询类合同的假设条款开头是这样写的 ——「以下是与本次合作相关的假设与依赖清单。
+     {\bfseries 客户方应确认以下陈述准确且有效}。」};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 29 · 上册第 6 章·竖着切，不是横着切
+% 「千层蛋糕竖着切」是这一节的原始比喻，画出来比说一遍管用。
+% 右边把行走骨架和薄切片的先后关系接上：骨架是第一刀，
+% 之后每一片薄切片都是往这具骨架上加的一块肉。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdslice}{%
+\begin{tikzpicture}[x=1cm,y=1cm,
+  lay/.style={draw=fdline, line width=0.6pt, fill=white}]
+  % 画的顺序要紧：先画层的白底框，再涂切片的色块，最后才写层名。
+  % 层名写在最后，色块盖不住它。
+  \def\LY{ {2.10/界面, 1.55/{API · 编排}, 1.00/业务逻辑, 0.45/数据库} }
+
+  \foreach \y/\nm in {2.10/界面, 1.55/{API · 编排}, 1.00/业务逻辑, 0.45/数据库}{
+    \draw[lay] (0.15,\y) rectangle (4.35,\y+0.5);
+    \draw[lay] (5.10,\y) rectangle (9.30,\y+0.5);
+    \draw[lay] (10.05,\y) rectangle (14.25,\y+0.5);
+  }
+  % 横着切：整整一层
+  \fill[fdstop!28] (0.18,0.48) rectangle (4.32,0.93);
+  % 竖着切：一片贯穿全部四层，后面两片是接着切的
+  \fill[fdacc!32] (5.55,0.48) rectangle (6.35,2.57);
+  \draw[fdacc, line width=0.9pt] (5.55,0.45) rectangle (6.35,2.60);
+  \fill[fdacc!13] (6.70,0.48) rectangle (7.35,2.57);
+  \fill[fdacc!13] (7.70,0.48) rectangle (8.35,2.57);
+  % 行走骨架：只描边不填色
+  \draw[fdacc, line width=1.1pt, dash pattern=on 2.2pt off 1.6pt]
+    (10.50,0.45) rectangle (11.15,2.60);
+  \foreach \y/\nm in {2.10/界面, 1.55/{API · 编排}, 1.00/业务逻辑, 0.45/数据库}{
+    \node[font=\scriptsize, text=fdmute] at (2.25,\y+0.25) {\nm};
+    \node[font=\scriptsize, text=fdmute] at (7.20,\y+0.25) {\nm};
+    \node[font=\scriptsize, text=fdmute] at (12.15,\y+0.25) {\nm};
+  }
+  \node[font=\bfseries\footnotesize, text=fdstop, anchor=south west] at (0.15,2.68)
+    {× 横着切};
+  \node[font=\bfseries\footnotesize, text=fdacc, anchor=south west] at (5.10,2.68)
+    {✓ 竖着切 ── 薄切片};
+  \node[font=\bfseries\footnotesize, text=fdacc, anchor=south west] at (10.05,2.68)
+    {行走骨架 ── 第一刀};
+
+  \node[fdcav, anchor=north west, text width=4.2cm] at (0.15,0.30)
+    {先把所有数据库表建完，再统一做界面。{\bfseries 在做完第一层之前，拿不出任何能给客户看的东西。}};
+  \node[fdcav, anchor=north west, text width=4.2cm] at (5.10,0.30)
+    {一片就从界面切到数据库。判据只有一句：{\bfseries 这一片能不能现在单独发出去、让客户马上用一下？}答不上来，说明切得不够薄。};
+  \node[fdcav, anchor=north west, text width=4.2cm] at (10.05,0.30)
+    {每个组件给一个「能跑但什么都不做」的最简实现，返回假数据也算，然后{\bfseries 真正串起来端到端跑通一次}。这一步不能省，否则不是骨架，只是设计图。};
+
+  \node[fdout, fill=fdmilk, anchor=north west, text width=13.9cm] at (0.15,-2.15)
+    {{\bfseries 两者的关系：行走骨架是第一刀}，把「贯通全部主要组件」这件事一次性做完；
+     之后{\bfseries 每一条薄切片都是往这具骨架上加的一块肉}。
+     没有骨架就切片，切出来的往往是孤立的功能孤岛；只有骨架不切片，骨架永远长不成完整系统。};
+
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=north west] at (0.15,-3.25)
+    {三个相邻概念，回答的是三个不同的问题};
+  \foreach \i/\x/\nm/\q in {%
+    1/0.15/{薄切片}/{这一次该切多细、切哪个方向},
+    2/4.90/{行走骨架}/{用什么顺序把一个空系统的骨架先搭起来},
+    3/9.65/{曳光弹}/{这段代码写完之后是留下来长大，还是验证完就扔}}{
+    \node[fdout, fill=fdtint, anchor=north west, text width=4.15cm] at (\x,-3.70)
+      {{\bfseries\nm}\ \ \q};
+  }
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.15,-4.95)
+    {{\bfseries 曳光弹容易和原型讲混。}核心区别是：原型天生就不是为长期存在设计的代码，
+     它生来就是要被扔掉的 —— 有一个形象的类比，{\bfseries 原型就像西部片里的小镇布景，
+     全是正面门脸，背后什么都没有}。而曳光弹这段代码会留下来长大。
+     国内现场常把曳光弹说成「探路代码」「试水版本」，只对了一半：「试水」通常暗示写完就扔。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 30 · 上册第 6 章·技术债四象限，以及 V0 允许硬编码的那一格
+% 四象限是 Fowler 的既有分类，本书的增量是那句判据：
+% V0 值得主动欠的债几乎全部落在「审慎—刻意」这一格，
+% 说不清为什么欠的，已经滑到「鲁莽」区。把允许区涂出来，这句话不用解释。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdtechdebt}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \def\QW{7.0}\def\QH{5.0}
+  % 允许区高亮
+  \fill[fdtint] (0,0) rectangle (\QW/2,-\QH/2);
+  \foreach \i/\x/\y/\ttl/\txt/\col in {%
+    1/0/0/{审慎 — 刻意}/{为赶发布主动欠债，且事后利息足够小时可能不值得还}/fdacc,
+    2/3.5/0/{鲁莽 — 刻意}/{明知故犯，选择又快又脏的做法}/fdstop,
+    3/0/-2.5/{审慎 — 无意}/{哪怕优秀团队，也常要写一年代码才明白当初最好的设计是什么样}/fdmute,
+    4/3.5/-2.5/{鲁莽 — 无意}/{不了解好的设计实践，写出的混乱代码}/fdstop}{
+    \draw[fdline, line width=0.7pt] (\x,\y) rectangle (\x+3.5,\y-2.5);
+    \node[font=\bfseries\footnotesize, text=\col, anchor=north west] at (\x+0.22,\y-0.15) {\ttl};
+    \node[fdcav, anchor=north west, text width=3.05cm] at (\x+0.22,\y-0.70) {\txt};
+  }
+  \node[font=\bfseries\scriptsize, text=fdacc, anchor=south west] at (0.22,-2.42)
+    {V0 值得欠的债，几乎全在这一格};
+  % 横轴是审慎↔鲁莽，纵轴是刻意↔无意。这两条最初写反了，改图时按格子里的名字核对
+  \node[font=\scriptsize, text=fdmute, anchor=south] at (1.75,0.12) {审慎};
+  \node[font=\scriptsize, text=fdmute, anchor=south] at (5.25,0.12) {鲁莽};
+  \node[font=\scriptsize, text=fdmute, anchor=east] at (-0.15,-1.25) {刻意};
+  \node[font=\scriptsize, text=fdmute, anchor=east] at (-0.15,-3.75) {无意};
+
+  \node[fdout, fill=fdtint, anchor=north west, text width=6.35cm] at (7.85,0)
+    {{\bfseries 什么时候允许硬编码}\\[1.5pt]
+     · 这个环节的业务规则本身还没被客户确认 —— 价值风险未验证前，抽象一套可配置系统纯属浪费\\
+     · 只服务于当前这一条最窄路径，还不知道会不会有第二个变体\\
+     · 硬编码成本远低于抽象成本，且调用范围窄、改动半径可控};
+  \node[fdout, fill=fdrose, anchor=north west, text width=6.35cm] at (7.85,-2.65)
+    {{\bfseries 什么时候必须抽象}\\[1.5pt]
+     · 涉及资金、权限、数据删除这类{\bfseries 不可逆操作} —— 不允许「先硬编码后面再改」\\
+     · 客户已经明确说过「这不是唯一场景，未来一定会有第二种」\\
+     · 对接的是客户核心生产系统，爆炸半径已超出 V0 自己能兜住的范围};
+
+  \node[fdout, fill=fdamber, anchor=north west, text width=13.9cm] at (0,-5.55)
+    {{\bfseries 判据本质上是同一句话反过来问两次：这处捷径，如果客户明天就要看第二个变体，会不会让我完全重写？}
+     答得出「不会，改一行配置就行」，可以抽象；答不出，说明现在抽象也是猜的，
+     不如先硬编码、等真正出现第二个变体时再抽象。
+     {\bfseries 过早抽象和过晚抽象都是浪费，V0 阶段更容易踩的是过早抽象}——
+     把本该半天做完的东西做成了一周的框架设计。};
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0,-7.30)
+    {{\bfseries 偿还时机不是留到最后专门开一个迭代还债}，是绑定在「下一次要动这块代码」的时刻：
+     做第一个相关功能时额外多花几天，把周边的烂代码清掉一部分，对改动频繁的区域零容忍。
+     对「鲁莽」两格里的债设强制期限（比如两周），到期必须还清或重新评审升级为「审慎」级并排期，
+     不能无限期挂在生产环境里。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 31 · 上册第 8 章·一条验收指标的解剖
+% 正文给了「反例 / 正例」两栏表，但表格看不出「四件事要写在同一句里」。
+% 把四个字段当成一句话的四个部件标注出来，读者照着能当场改自己的验收单。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdacceptline}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  % ── 上：分档递进 ────────────────────────────────────
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.15,0.9)
+    {先别谈一个精确数字，谈分档};
+  \node[fdout, fill=fdrose, anchor=north west, text width=4.0cm] at (0.15,0.35)
+    {{\bfseries\color{fdstop}× 一次性锁死终态}\\准确率必须达到 92\%};
+  \draw[fdedgea] (4.35,-0.20) -- (4.95,-0.20);
+  \fill[fdtint, rounded corners=2.4pt] (5.10,-0.55) rectangle (7.90,0.05);
+  \node[font=\footnotesize, text=fdink] at (6.50,-0.25) {第一版 · A 档};
+  \node[font=\scriptsize, text=fdmute, anchor=north] at (6.50,-0.62) {80--89.9\%};
+  \fill[fdtint, rounded corners=2.4pt] (8.20,-0.25) rectangle (11.00,0.35);
+  \node[font=\footnotesize, text=fdink] at (9.60,0.05) {第二版 · B 档};
+  \node[font=\scriptsize, text=fdmute, anchor=north] at (9.60,-0.32) {90\% 以上};
+  \draw[fdedgea] (7.90,-0.25) -- (8.20,-0.05);
+  \node[fdcav, anchor=north west, text width=2.9cm] at (11.35,0.30)
+    {既可判定，又不强求项目一开始就把话说死。对方更容易签，你也不用在第一版就背一个可能达不到的数字。};
+
+  % ── 下：一条指标的解剖 ──────────────────────────────
+  \draw[fdthin] (0,-1.35) -- (14.35,-1.35);
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.15,-1.55)
+    {数字定下来之后，口径必须和数字写在同一句里};
+
+  \node[fdout, fill=fdrose, anchor=north west, text width=13.9cm] at (0.15,-2.10)
+    {{\bfseries\color{fdstop}× 反例}\ \ 人工改写率 5\%，效果良好，上线后测。
+     —— 四件事一件没写：在什么数据上测、分母是什么、谁判定、什么时候测。};
+
+  \fill[fdtint, rounded corners=3pt] (0.15,-3.05) rectangle (14.05,-4.90);
+  \node[font=\bfseries\scriptsize, text=fdacc, anchor=north west] at (0.35,-3.15) {✓ 正例};
+  \node[font=\footnotesize, text=fdink, anchor=north west, text width=13.4cm, align=left]
+    at (0.35,-3.55)
+    {在 2026 年 Q1 真实工单随机抽样 300 条（含 47 条历史失败案例）上，
+     人工改写率（＝被驳回的复核决策 ÷ 进入人工复核的决策）≤ 5\%；
+     由甲方财务部两名指定专家独立标注，不一致时由第三人裁决；
+     上线后第 30 天与第 60 天各测一次，取第 60 天为准。};
+
+  \foreach \i/\x/\lb/\txt in {%
+    1/1.30/{在什么数据上测}/{反例：「测试集」},
+    2/4.75/{分母是什么}/{反例：「人工改写率 5\%」},
+    3/8.20/{谁判定}/{反例：「效果良好」},
+    4/11.65/{什么时候测}/{反例：「上线后」}}{
+    \draw[fdacc, line width=0.8pt, -{Stealth[length=3.4pt]}] (\x,-5.45) -- (\x,-5.00);
+    \node[font=\bfseries\scriptsize, text=fdacc, anchor=north] at (\x,-5.50) {\lb};
+    \node[fdcav, anchor=north, align=center, text width=3.0cm] at (\x,-5.92) {\txt};
+  }
+
+  \node[fdout, fill=fdamber, anchor=north west, text width=13.9cm] at (0.15,-6.70)
+    {{\bfseries 口径不同的数字，不能并列比较。}同一场行业分享被两个人转述，一个说信任期四个月，
+     一个说六个月 —— 同一件事，转述两次，数字差了 50\%。
+     所以验收单上引用任何外部基准时，{\bfseries 要么给出能点开的一手出处，要么写明「经验区间，非精确基准」}。
+     含糊的数字比没有数字更危险，因为它会被当成事实拿去做决策。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 32 · 上册第 10 章·那条坍塌漏斗，以及影子 AI 造成的低估
+% 「95% 零回报」这个数字本身没什么用，有用的是它背后那条漏斗的形状——
+% 而且两类工具的形状完全不同。FDE 交付的系统几乎全在坍得最狠的那一类。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdadoptfunnel}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.15,0.9)
+    {同一份研究，两类工具，两条形状完全不同的漏斗};
+
+  % 共基线向上长的柱子。柱高就是百分比，5\% 那根细成一条线——这正是要看的东西
+  \foreach \i/\bx/\ttl/\a/\b/\c/\col/\note in {%
+    1/0/{通用型工具}/80/50/40/fdmute/{对话助手 · 代码补全这类},
+    2/-3.15/{任务专用型工具}/60/20/5/fdstop/{嵌入业务流程的那一类}}{
+    \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.15,\bx-0.05) {\ttl};
+    \node[fdcav, anchor=north west, text width=3.0cm] at (0.15,\bx-0.50) {\note};
+    \draw[fdthin] (3.45,\bx-2.15) -- (13.10,\bx-2.15);
+    \foreach \k/\x/\v/\lb in {1/3.55/\a/{投入探索}, 2/6.75/\b/{进入试点}, 3/9.95/\c/{成功实施}}{
+      \fill[\col!28, rounded corners=1.8pt]
+        (\x,\bx-2.15) rectangle (\x+2.75,{\bx-2.15+0.019*\v});
+      \draw[\col!65, line width=0.6pt, rounded corners=1.8pt]
+        (\x,\bx-2.15) rectangle (\x+2.75,{\bx-2.15+0.019*\v});
+      \node[font=\bfseries\footnotesize, text=fdink, anchor=south]
+        at (\x+1.375,{\bx-2.10+0.019*\v}) {\v\%};
+      \node[font=\scriptsize, text=fdmute, anchor=north] at (\x+1.375,\bx-2.22) {\lb};
+    }
+    \foreach \x in {6.35,9.55}{\draw[fdedge] (\x,\bx-1.95) -- (\x+0.35,\bx-1.95);}
+  }
+  \draw[fdstop, line width=1.0pt, -{Stealth[length=4pt]}] (13.30,-4.90) -- (12.10,-5.20);
+  \node[font=\bfseries\scriptsize, text=fdstop, anchor=south east, align=right, text width=3.6cm]
+    at (14.35,-4.85) {前线交付的系统，几乎全部落在这一类};
+
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.15,-5.80)
+    {广为流传的「80\% 失败」其实是一篇财经报道里某供应商高管的采访发言，不是研究结论；
+     「70\% 变革失败率」是已被证伪的僵尸数字。唯一站得住的那份研究给的是「95\% 零回报」，
+     而它的口径是{\bfseries 投资回报}，不是「项目失败」。有用的不是那个百分比，是上面这两条漏斗的形状差别。};
+
+  \draw[fdthin] (0,-6.95) -- (14.35,-6.95);
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.15,-7.15)
+    {影子 AI ── 官方采用率会系统性低估真实使用率};
+  \foreach \i/\y/\v/\lb/\col in {%
+    1/-7.80/40/{企业正式采购了大模型订阅服务}/fdmute,
+    2/-8.60/90/{员工说自己在定期使用个人 AI 工具处理工作任务}/fdstop}{
+    \fill[\col!30, rounded corners=1.6pt] (0.15,\y) rectangle ({0.15+0.075*\v},\y-0.55);
+    \node[font=\bfseries\footnotesize, text=fdink, anchor=west] at ({0.15+0.075*\v+0.15},\y-0.28)
+      {\v\%};
+    \node[fdcav, anchor=west] at ({0.15+0.075*\v+0.95},\y-0.28) {\lb};
+  }
+  \node[fdout, fill=fdamber, anchor=north west, text width=13.9cm] at (0.15,-9.50)
+    {{\bfseries 你在后台看到的「没人用」，可能只是「没人用你这个官方入口」。}
+     员工早就用自己的账号绕过了你精心设计的企业系统。
+     测量采用率时必须交叉验证官方埋点和员工的真实行为，不能只看系统日志。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 33 · 上册第 10 章·两个最容易被算错的指标
+% 任务完成率不是一个笼统的百分比，是一条事件漏斗；
+% 人工改写率的分母不是全部决策。这两件事错一个，报表就没意义了。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdoverride}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.15,0.9)
+    {任务完成率 ── 不是一个笼统的百分比，是一条明确的事件漏斗};
+  \foreach \i/\x/\txt in {%
+    1/0.15/{提交问题}, 2/3.70/{模型给出输出},
+    3/7.25/{用户没有撤销，也没有重新提交}, 4/10.80/{用户真的执行了输出建议的动作}}{
+    \node[fdcard, anchor=north west, text width=3.05cm, align=left, font=\scriptsize,
+          fill=fdmilk] (f\i) at (\x,0.35) {\txt};
+  }
+  \foreach \i/\j in {1/2,2/3,3/4}{\draw[fdedgea] (f\i.east) -- (f\j.west);}
+  \draw[fdacc, line width=1.0pt, -{Stealth[length=4pt]}] (12.35,-1.05) -- (12.35,-0.62);
+  \node[font=\bfseries\scriptsize, text=fdacc, anchor=north] at (12.35,-1.08)
+    {最后一步的完成率，才是任务完成率};
+  \node[fdcav, anchor=north west, text width=7.5cm] at (0.15,-1.08)
+    {必须在文档里写死统计口径是按「每个用户只算一次」还是「每次进入都算」——
+     否则同一条漏斗在不同报告里会算出不同数字，团队内部先吵起来。};
+
+  % ── 人工改写率的分母 ───────────────────────────────
+  \draw[fdthin] (0,-2.35) -- (14.35,-2.35);
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.15,-2.55)
+    {人工改写率 ── 全章最容易被算错的一个，错在分母};
+
+  \draw[fdline, line width=0.8pt, rounded corners=3pt] (0.15,-3.10) rectangle (8.20,-6.65);
+  \node[font=\scriptsize, text=fdmute, anchor=north west] at (0.35,-3.20) {全部决策};
+  \fill[fdamber, rounded corners=3pt] (1.15,-3.75) rectangle (7.20,-6.30);
+  \node[font=\bfseries\scriptsize, text=fdwarn, anchor=north west] at (1.35,-3.85)
+    {进入人工复核 / 可编辑环节的决策};
+  \fill[fdrose, rounded corners=3pt, draw=fdstop, line width=0.8pt]
+    (2.15,-4.45) rectangle (6.20,-5.45);
+  \node[font=\bfseries\scriptsize, text=fdstop, anchor=north] at (4.175,-4.72)
+    {审核人员驳回 AI 建议的};
+  \node[font=\scriptsize, text=fdmute, anchor=north] at (4.175,-5.62)
+    {全自动通过、不经人工的那些，不进分母};
+
+  \node[fdout, fill=fdtint, anchor=north west, text width=5.6cm] at (8.60,-3.10)
+    {{\bfseries 分子}\\[1.5pt]被驳回的复核决策};
+  \node[fdout, fill=fdamber, anchor=north west, text width=5.6cm] at (8.60,-4.15)
+    {{\bfseries 分母}\\[1.5pt]{\bfseries\color{fdwarn}进入人工复核的决策}，
+     不是「全部决策」};
+  \node[fdout, fill=fdrose, anchor=north west, text width=5.6cm] at (8.60,-5.35)
+    {{\bfseries\color{fdstop}算错的后果：}把全自动通过的决策也塞进分母，
+     这个比率会被系统性低估，团队会误以为系统比实际表现更可靠。};
+
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.15,-7.15)
+    {落地时做三件事：明确 override 事件的记录点在哪个环节；分母只统计「进入复核 / 可编辑环节」的决策；
+     {\bfseries 按功能模块与用户角色拆开看，不要只报一个全局数字}。
+     公开的阈值基准只能当起始假设，不能当标准 —— 目标值要从自己生产环境的数据反推。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 34 · 上册第 10 章·四段式翻译
+% 「四段缺一不可」是这一节的判据：只报第一段业务方听不懂，
+% 只报最后一段业务方不知道你凭什么这么算。画成一条链，缺哪一段一目了然。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdtranslate}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \foreach \i/\x/\nm/\who in {%
+    1/0.15/{技术变化}/{工程师说的话}, 2/3.70/{用户体验变化}/{一线感受得到的},
+    3/7.25/{业务结果}/{业务方关心的}, 4/10.80/{具体金额}/{预算审批人签字的依据}}{
+    \fill[fdtint, rounded corners=3pt] (\x,0) rectangle (\x+3.05,-1.00);
+    \node[font=\bfseries\footnotesize, text=fdink, anchor=north] at (\x+1.525,-0.12) {\nm};
+    \node[font=\scriptsize, text=fdmute, anchor=north] at (\x+1.525,-0.60) {\who};
+    \ifnum\i<4 \draw[fdedgea, line width=1.1pt] (\x+3.10,-0.50) -- (\x+3.50,-0.50);\fi
+  }
+  \node[font=\bfseries\scriptsize, text=fdstop, anchor=north west] at (0.15,-1.20)
+    {四段缺一不可：只报第一段，业务方听不懂；只报最后一段，业务方不知道你凭什么这么算};
+
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=north west] at (0.15,-1.90)
+    {一条走完全程的例子（金额为示范用的假设数，替换成你自己环境的真实数字）};
+  \foreach \i/\x/\txt in {%
+    1/0.15/{P95 延迟\\500 毫秒 → 200 毫秒}, 2/3.70/{页面加载更快},
+    3/7.25/{减少放弃，提升转化}, 4/10.80/{转化率 +2\% × 月成交额 1000 万\\= {\bfseries 月增 20 万}}}{
+    \node[fdout, fill=fdmilk, anchor=north west, text width=2.6cm, align=center] at (\x,-2.35) {\txt};
+  }
+
+  \node[fdout, fill=fdamber, anchor=north west, text width=13.9cm] at (0.15,-4.05)
+    {{\bfseries 同一个动作套到一个纯工程指标上：}「召回率 85\%」是工程师之间的暗语，
+     业务方听不懂它意味着什么风险。翻译成 ——
+     {\bfseries「每 100 单会漏 15 单，需要人工兜底流程」}。
+     这一句话立刻能让业务方回答一个具体问题：{\bfseries 我们的人工兜底流程接得住这 15 单吗？}
+     而不是停留在「85\% 听起来还不错」的模糊感觉上。};
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.15,-5.55)
+    {任何一个精确率 / 召回率数字都能这样翻：先换算成「每 N 单会出几单问题」，
+     再问一句「现在的兜底流程接不接得住这个量」。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 35 · 上册第 11 章·三种政府采购方式的适用条件
+% 三种方式的适用条件不重叠，而且区分它们的那条轴很明确：
+% 招标阶段能不能把需求写清楚。AI 项目卡在这条轴的哪一头，
+% 决定了它更贴合哪一种——但「AI 项目里竞争性磋商占比更高」
+% 这句话本身没有官方统计支撑，图上如实标注。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdprocure}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \draw[fdline, line width=0.9pt, {Stealth[length=4pt]}-{Stealth[length=4pt]}]
+    (0.4,0) -- (13.9,0);
+  \node[font=\scriptsize, text=fdmute, anchor=north west] at (0.25,-0.15)
+    {需求不够明确、预算相对粗略};
+  \node[font=\scriptsize, text=fdmute, anchor=north east] at (14.05,-0.15)
+    {需求明确、完整、清晰};
+  \node[font=\bfseries\scriptsize, text=fdink, anchor=south] at (7.15,0.12)
+    {区分三种方式的，是招标阶段能不能把需求写清楚};
+
+  \node[fdcard, draw=fdacc, line width=1.0pt, anchor=north, text width=4.2cm, align=left]
+    (cs) at (2.85,-0.75)
+    {{\bfseries 竞争性磋商}\\[1.5pt]{\scriptsize\color{fdmute}组建磋商小组与供应商磋商，从评审后的候选名单中确定成交供应商}};
+  \node[fdcard, draw=fdacc, line width=1.0pt, anchor=north, text width=4.2cm, align=left]
+    (ob) at (11.45,-0.75)
+    {{\bfseries 公开招标}\\[1.5pt]{\scriptsize\color{fdmute}以招标公告方式邀请不特定供应商投标。政府采购的主要方式}};
+  \draw[fdedgea] (2.85,-0.10) -- (2.85,-0.75);
+  \draw[fdedgea] (11.45,-0.10) -- (11.45,-0.75);
+
+  \node[fdcard, draw=fdwarn, line width=1.0pt, anchor=north, text width=4.2cm, align=left]
+    (iv) at (7.15,-2.55)
+    {{\bfseries 邀请招标}\ \ {\scriptsize\color{fdwarn}不在这条轴上}\\[1.5pt]{\scriptsize\color{fdmute}随机邀请三家以上符合资格的供应商，不发公告。触发条件是供应商范围有限、公开招标费用占比过大、涉密不宜公开 —— {\bfseries 跟需求清不清楚无关}}};
+
+  \node[fdout, fill=fdtint, anchor=north west, text width=6.4cm] at (0.15,-5.30)
+    {{\bfseries 大模型 / AI 类项目通常落在左边这一头。}需求往往难以在招标阶段完全量化：
+     模型能力边界、数据质量、最终效果都要等实际接触数据后才能评估。};
+  \node[fdout, fill=fdrose, anchor=north west, text width=7.0cm] at (7.10,-5.30)
+    {{\bfseries\color{fdstop}但这只是从条款适用逻辑上的归纳。}本书没有找到官方统计支持
+     「AI 项目里竞争性磋商占比更高」这个判断本身 —— 不要把它当成一个有精确比例的结论去引用。};
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.15,-6.90)
+    {另一个容易混的：{\bfseries 竞争性磋商} 和「需求已明确、更看重价格与时效」的{\bfseries 竞争性谈判}
+     是两种不同的方式，口语里常被混用，实际适用条件是相反的。};
+
+  \draw[fdthin] (0,-7.70) -- (14.35,-7.70);
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.15,-7.90)
+    {废标的常见触发点 —— 写标书时逐项自查，别等结果出来再复盘};
+  \foreach \i/\x/\y/\txt in {%
+    1/0.15/-8.45/{投标文件未按规定密封或签署}, 2/4.85/-8.45/{逾期送达},
+    3/9.55/-8.45/{资质证书或业绩证明缺失}, 4/0.15/-9.15/{报价明显低于成本},
+    5/4.85/-9.15/{被认定存在围标串标嫌疑}}{
+    \node[fdout, fill=fdamber, anchor=north west, text width=4.15cm] at (\x,\y) {□\ \ \txt};
+  }
+  \node[fdcav, anchor=north west, text width=4.15cm] at (9.55,-9.15)
+    {评分方法两类：{\bfseries 综合评分法}（价格 ＋ 技术方案 ＋ 商务资信加权）与最低评标价法。
+     AI 项目因技术方案差异往往是决定性因素，多数走前者。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 36 · 上册第 13 章·三部法落在系统的哪一层
+% 三百条条文里真正能翻译成工程动作的只有九条。九条列成表已经够用，
+% 表看不出来的是：它们各自卡在系统的不同层上，而且第一条卡在架构之前。
+% 把九条钉到架构图上，立项时照着走一遍就知道哪一层还没交代。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdthreelaws}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[fdout, fill=fdrose, anchor=north west, text width=13.9cm] at (0.15,0.9)
+    {{\bfseries\color{fdstop}网安法 §31 · 关基认定 —— 这一条在架构之前。}
+     给能源、交通、金融、政务等客户的核心系统做 RAG / Agent，
+     {\bfseries 第一步不是选技术栈，是先确认客户方是否已被认定为关基运营者}。
+     这个判断直接决定向量库能不能用境外托管、日志能不能接境外 SaaS。};
+  \draw[fdstop, line width=1.0pt, -{Stealth[length=4pt]}] (7.15,-0.35) -- (7.15,-0.85);
+
+  \foreach \i/\y/\nm/\law/\act/\col in {%
+    1/-1.00/{数据源}/{数安法 §21\\分类分级}/{项目启动阶段做一次摸底，给 RAG 语料打上一般 / 重要 / 核心数据标签。这个标签直接决定检索层能不能用这份数据}/fdacc,
+    2/-2.40/{脱敏处理}/{PIPL §73\\去标识化 ≠ 匿名化}/{简单掩码或哈希只是去标识化，仍受 PIPL 约束 —— 不能当作豁免合规的「匿名化」处理}/fdwarn,
+    3/-3.80/{向量库 · 日志 · 评估集}/{网安法 §37\\境内存储与出境评估}/{关基客户的这三样默认不接境外托管服务，确需出境的走安全评估（判定路径见 §13.4）}/fdstop,
+    4/-5.20/{检索层 Retriever}/{PIPL §6\\最小必要}/{做字段级脱敏，只取当前任务所需的最小字段集合 —— 不要把整张用户表塞进上下文}/fdacc,
+    5/-6.60/{知识库里的\\敏感个人信息}/{PIPL §13 / §28 / §29\\单独同意}/{生物识别 · 医疗健康 · 金融账户 · 行踪轨迹 · 不满十四周岁未成年人信息，要单独访问控制}/fdwarn,
+    6/-8.00/{输出与决策}/{PIPL §24\\自动化决策申诉权}/{Agent 输出触发对个人权益有重大影响的决定时，保留人工介入与申诉通道}/fdacc}{
+    \fill[fdmilk, rounded corners=3pt] (0.15,\y) rectangle (14.05,\y-1.25);
+    \draw[\col, line width=2.2pt] (0.15,\y) -- (0.15,\y-1.25);
+    \node[font=\bfseries\scriptsize, text=fdink, anchor=north west, text width=2.7cm, align=left]
+      at (0.42,\y-0.12) {\nm};
+    \node[font=\bfseries\scriptsize, text=\col, anchor=north west, text width=3.6cm, align=left]
+      at (3.35,\y-0.12) {\law};
+    \node[fdcav, anchor=north west, text width=6.7cm] at (7.20,\y-0.10) {\act};
+  }
+
+  \node[fdout, fill=fdamber, anchor=north west, text width=6.85cm] at (0.15,-9.75)
+    {{\bfseries 数安法 §30 · 定期风险评估}\\[1.5pt]
+     不在某一层上，横跨整个交付后周期。客户被认定为重要数据处理者的，
+     年度风险评估报告要{\bfseries 写进运维 SOW}，不是一次性验收项。};
+  \node[fdout, fill=fdamber, anchor=north west, text width=6.85cm] at (7.35,-9.75)
+    {{\bfseries PIPL §66 · 法律责任}\\[1.5pt]
+     两档罚则{\bfseries 分别适用，不是二选一}。立项风险评估要把两档都算进合规成本估算，
+     不要只算轻的那一档。};
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.15,-11.30)
+    {三部法条文加起来接近三百条，绝大部分和 AI 系统设计没有直接关系。
+     FDE 需要的不是通读全文，是找出{\bfseries 能翻译成工程动作的那一小撮}——上面九条。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 案例章的「被否决 vs 最终架构」对照图（六章共用一个宏）
+%
+% 全书唯一讲「为什么不这么做」的地方，正是图最擅长的。
+% 这张图除了并排对照，还多标一件正文里散着说的事：每条路死在哪一步。
+% 六章排下来能看出一个共同的东西——多数方案死在评审阶段，
+% 死得越早越省钱；死在原型之后的，都是「演示能跑、规模化撑不住」那一类。
+%
+% ⚠ 三个参数都是 \foreach 列表，字段用 / 分隔、条目用 , 分隔。
+%   所以正文里一律用全角标点（，、），不能出现半角逗号，否则会被当成分隔符。
+% ═══════════════════════════════════════════════════════════════
+% #1 三条被否决的路：序号/方案名/否决理由/死在哪一步/颜色
+% #2 三条都否决之后收敛到哪条路径（一句话）
+% #3 最终架构的决策：x 坐标/宽度/决策名/一句话
+\newcommand{\fdcase}[3]{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[font=\bfseries\footnotesize, text=fdstop, anchor=south west] at (0.15,0.12)
+    {被否决的三条路};
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south east] at (14.35,0.12)
+    {死在哪一步};
+
+  \foreach \i/\nm/\why/\stage/\col in {#1}{
+    \fill[fdrose!45, rounded corners=3pt] (0.15,{-2.30*(\i-1)}) rectangle (14.05,{-2.30*(\i-1)-2.10});
+    \node[fdnum, draw=fdstop, text=fdstop] at (0.62,{-2.30*(\i-1)-0.42}) {\i};
+    \node[font=\bfseries\footnotesize, text=fdink, anchor=north west, text width=7.4cm, align=left]
+      at (1.08,{-2.30*(\i-1)-0.12}) {\nm};
+    \node[fdout, fill=\col!20, anchor=north east, text width=4.6cm, align=center]
+      at (13.85,{-2.30*(\i-1)-0.12}) {{\bfseries\color{\col}\stage}};
+    \node[fdcav, anchor=north west, text width=12.6cm] at (1.08,{-2.30*(\i-1)-0.90}) {\why};
+  }
+
+  \draw[fdedgea, line width=1.2pt] (7.10,-6.90) -- (7.10,-7.35);
+  \node[fdout, fill=fdmilk, anchor=north west, text width=13.9cm] at (0.15,-7.35)
+    {{\bfseries 三条都被否决之后，团队才收敛到 ——}\ #2};
+
+  \node[font=\bfseries\footnotesize, text=fdacc, anchor=south west] at (0.15,-8.80)
+    {最终架构决策};
+  \foreach \x/\w/\dn/\dd in {#3}{
+    \fill[fdtint, rounded corners=3pt] (\x,-9.00) rectangle (\x+\w,-11.05);
+    \node[font=\bfseries\scriptsize, text=fdink, anchor=north west, text width={(\w-0.4)*1cm}, align=left]
+      at (\x+0.20,-9.12) {\dn};
+    \node[fdcav, anchor=north west, text width={(\w-0.4)*1cm}] at (\x+0.20,-9.80) {\dd};
+  }
+\end{tikzpicture}}
+
+% ── 上册第 15 章 · 涉密制造现场 ──────────────────────────────
+\newcommand{\fdcaseonefive}{\fdcase{%
+  1/{云端 API ＋ 加密专线}/{专线本质上仍然是与外部网络实体的双向连接路径。涉密网络分级保护不允许隔离网络与任何外部实体存在数据往返通道 —— 哪怕这条通道是加密的、专用的、低延迟的。更直接的问题是：请求内容（可能含涉密图纸参数、失效分析细节）必须离开物理边界，这本身就构成保密事件，不是「控制好访问权限」能规避的。}/{合规评审当天划掉\\没进原型}/fdstop,
+  2/{采购国际厂商的本地私有化一体机（闭源黑盒）}/{闭源二进制做不了代码级漏洞扫描，也生成不了完整 SBOM —— 供应链信任链在第一步就断了。更麻烦的是授权验证依赖联网激活或定期心跳上报，与「禁遥测」直接冲突，而厂商自己也说不清设备内部有几个上报点。{\bfseries「说不清楚」本身就是拒绝理由}，不需要等实测抓包坐实。}/{合规扫描过不了}/fdstop,
+  3/{现场从零预训练自有模型}/{预训练需要的数据规模、算力集群、专业人才门槛，客户现场都不具备。现场项目周期以月计，从零预训练一个可用模型以年计，数量级完全不匹配。这不是「技术上做不到」，是「在项目预算和排期约束下做不到」—— 工程决策要把这类现实约束当成硬边界。}/{可行性论证阶段}/fdwarn%
+}{开源权重 ＋ 现场 LoRA 微调 ＋ 完全自包含的离线部署。}{%
+  0.15/2.62/{① 开源权重选型}/{按 License 条款与硬件需求选，刻意避开需另行申请授权的协议},
+  2.99/2.62/{② LoRA 微调}/{用工程团队历史积累的设计文档与失效分析记录，在现场做},
+  5.83/2.62/{③ 自包含离线部署包}/{镜像导出 · 签名 · SBOM · 依赖打包 · 单一介质},
+  8.67/2.62/{④ 本地向量库硬接线}/{只能部署在隔离网络内部},
+  11.51/2.54/{⑤ 合规扫描应对}/{在标准流程上加一步「外联地址审计」}%
+}}
+
+% ── 上册第 16 章 · 物流结算摄取与对账 ────────────────────────
+\newcommand{\fdcaseonesix}{\fdcase{%
+  1/{正则表达式 ＋ 规则引擎硬编码全部票据格式}/{每接入一个新供应商就要新增专属解析规则，规则数量与供应商数量线性同步增长{\bfseries 而且互相耦合}，维护成本超线性上升。团队测算：供应商数量翻一倍，光维护正则库就要额外投入 1.5--2 名工程师 —— 这等于把「数据摄取」变成一个吞噬团队产能的无底洞。}/{正式评审时否决}/fdstop,
+  2/{发现不一致就人工排查，升级为传统告警值班}/{原型阶段还能扛住（那时双跑刚开始，不一致发生率低），但双跑进入稳定期后，不一致的绝对数量随事件总量抬升，值班排查耗时迅速超过团队能承受的量级 —— 而且排查质量随疲劳程度下降，{\bfseries 凌晨写出来的补偿 SQL 被复核挑出错误的概率明显高于白天}。}/{原型能扛\\规模化后撑不住}/fdwarn,
+  3/{整条链路交给一个大模型端到端，不设中间的强类型校验层}/{同一份有歧义的票据，模型在不同次调用给出不同解析结果（金额栏位有时是「1,200.00」有时是「1200.00」，数值没错但格式不统一，下游按字符串比对时误判为不一致）；而且模型偶尔会{\bfseries 礼貌性地编造一个看起来合理、实际不存在的字段值}去填补缺失信息。}/{原型测试暴露后否决}/fdwarn%
+}{模型的输出必须过一层确定性的类型化契约兜底 —— {\bfseries 不能让模型的输出直接等同于系统的事实来源}。}{%
+  0.15/6.85/{主线一 · 强类型验证层}/{所有票据解析结果与对账候选修复方案，进入下游之前先过一层确定性契约},
+  7.35/6.70/{主线二 · 后台对账智能体}/{不参与实时链路，专职监听事件流，发现两套系统状态不一致时生成修复提案}%
+}}
+
+% ── 下册第 12 章 · MCP 盘活遗留系统 ──────────────────────────
+\newcommand{\fdcasemcp}{\fdcase{%
+  1/{直接改造遗留系统，把大型机核心账务重写或包一层现代化 REST API}/{核心账务承载着实时清算和夜间批量对账，任何改造都要经监管方重新认证。这家银行内部历史上类似规模的核心系统改造是{\bfseries 三年起步、预算千万美元级}，还要接受停机窗口和业务连续性的额外审批 —— 而本项目的时间预算是季度级。「改造 · 替换遗留系统」通常是成本与风险最高的一档。}/{评审阶段直接排除}/fdstop,
+  2/{RPA 屏幕自动化，机器人模拟专员在终端和 CRM 上点击键入}/{终端仿真界面的字段位置在不同业务模块之间并不统一，一次客户端版本升级就让识别脚本大面积失效；专员日常处理的请求存在大量自然语言变体，靠固定坐标和固定文本匹配根本覆盖不了。团队内部的评价是 ——{\bfseries「看起来能跑，实际是个每周都要救火的黑盒」}。}/{原型两周出效果\\小规模试点后否决}/fdwarn,
+  3/{让 Agent 直接连大型机数据库做写操作，绕开业务逻辑层}/{账务写操作必须经过业务规则校验（账户状态、额度、反洗钱规则）和完整的审计留痕。数据库直连意味着彻底绕开这些校验层 —— 一旦 Agent 判断有误，{\bfseries 脏数据直接进核心账务系统，没有任何拦截点}。风险等级与收益完全不成比例。}/{架构评审一票否决\\连原型机会都没给}/fdstop%
+}{需要一层中间层：不改造遗留系统本身，不依赖脆弱的界面模拟，也不绕开业务规则 —— 用标准化协议把遗留接口「包」起来，让 Agent 只能通过明确定义、带权限校验的工具调用它。}{%
+  0.15/3.35/{① MCP Server 封装遗留接口}/{把遗留能力做成明确定义、带权限校验的工具},
+  3.72/3.35/{② 三智能体分工}/{发现（只读）· 操作（写入提案）· 合规（规则校验）},
+  7.29/3.35/{③ LangGraph 编排与人在回路}/{触发红线时中断转人工，确认后恢复},
+  10.86/3.19/{④ 鉴权桥接}/{复用第 4 章的桥接模式，不另起一套}%
+}}
+
+% ── 下册第 13 章 · 工业质检 ──────────────────────────────────
+\newcommand{\fdcaseqc}{\fdcase{%
+  1/{云端大模型推理（通用视觉大模型云端调用）}/{三层原因叠加：一是{\bfseries 数量级对不上}—— 一次云端往返（上传 ＋ 推理 ＋ 下传）实测延迟在秒级，而节拍预算只有几百毫秒；二是产线专网不是全年稳定的，偶发抖动一次就意味着那一件产品的质检结果缺失，而产线不能因为网络问题停线等结果；三是产品图像和工艺参数属于客户不愿上云的敏感信息。}/{第一轮方案评审出局\\没进原型}/fdstop,
+  2/{传统机器视觉规则引擎（阈值分割 ＋ 模板匹配）}/{对光照和工况漂移极其敏感 —— 同一套阈值参数在早班和夜班的误报率能差出两三倍；新增一种缺陷类型要重新调参甚至重写规则，迭代周期以周计，跟不上产线实际的缺陷谱变化速度。{\bfseries 规则引擎在受控光箱环境下的演示效果很好，但那不是产线的真实工况。}}/{原型测试后否决}/fdwarn,
+  3/{边缘部署大参数量视觉模型（未裁剪的大型骨干网络）}/{推理精度确实占优，但在工控机 · 嵌入式 GPU 上实测推理延迟{\bfseries 超出节拍预算两到三倍}；且长时间满载运行的功耗和散热，在产线机柜的物理空间里不现实 —— 机柜没有额外风道扩容的余地，也不允许为了塞下这块卡去改造产线电气布局。}/{实验室能跑\\产线跑不动}/fdwarn%
+}{轻量化边缘模型 ＋ 分层阈值策略。}{%
+  0.15/3.35/{① 模型侧}/{轻量化骨干 ＋ 量化，压进节拍预算},
+  3.72/3.35/{② 阈值策略}/{分层判定，不用一个全局阈值扛所有工况},
+  7.29/3.35/{③ 训练与漂移应对}/{按班次与来料批次监控指标漂移，定期增量重训},
+  10.86/3.19/{④ 对接方式}/{与产线控制系统的接口形态与失败降级}%
+}}
+
+% ── 下册第 14 章 · 智慧矿山 ──────────────────────────────────
+\newcommand{\fdcasemine}{\fdcase{%
+  1/{实时回传地面云端分析}/{井下网络覆盖本身不完整，工作面前端大量场景常年无网络 ——{\bfseries 不是带宽不够优化一下就能解决，是链路本身间歇性不存在}。更进一步：即便干线区域网络在线，把关系人身安全判断的决策链路，建立在一条会随时中断的网络上，本身就是不可接受的风险设计。}/{架构讨论阶段否决}/fdstop,
+  2/{在作业面部署高算力边缘服务器}/{符合本质安全等级要求的设备功耗和散热包络，远小于常规工业级边缘 GPU 服务器的功耗档位 —— 方案样机送检直接卡在防爆合格证这一关。即便硬着头皮走认证流程，可预见的结果是要么通不过，要么大幅降配到认证能接受的功耗区间，{\bfseries 相当于绕一圈又回到「必须做模型小型化」这条路，中间还白搭进去几个月认证周期}。}/{本安防爆认证阶段否决}/fdwarn,
+  3/{维持纯人工监控值守，只加装更多摄像头}/{作业面数量和画面数量的增长速度，远超监控员能持续保持专注力的上限；长时间盯屏本身存在疲劳曲线导致的漏判率上升，而{\bfseries 班次交接前后的注意力空档，恰恰是历史事故统计里风险相对集中的时段}。堆人力和摄像头解决不了「人的注意力是有限资源」这个根本问题，也违背矿方最初的诉求。}/{需求评审阶段否决}/fdstop%
+}{边缘离线推理 ＋ 断点续传延迟同步 ＋ 模型小型化。}{%
+  0.15/2.62/{① 边缘离线推理}/{不依赖回传链路，断网也要出结论},
+  2.99/2.62/{② 断点续传与延迟同步}/{网络恢复后补齐，不丢结果},
+  5.83/2.62/{③ 模型小型化}/{与本安算力约束协同设计，不是先训完再压},
+  8.67/2.62/{④ 监管数据留存}/{按监管要求的周期与口径留存},
+  11.51/2.54/{⑤ 告警可解释}/{每条告警可追溯到原始画面}%
+}}
+
+% ── 下册第 15 章 · 高并发 RAG 性能手术 ───────────────────────
+\newcommand{\fdcaserag}{\fdcase{%
+  1/{横向扩容 ＋ 加大外部 API 配额}/{外部 API 的限流是供应商侧的硬性 QPS 上限，配额升级要走商务流程，不是临时加钱就能在大促当天生效的开关。就算配额能解决，{\bfseries P99 的真正瓶颈是「一次云端网络往返 ＋ 大模型生成耗时」本身}—— 这个耗时不会因为并发数增加而缩短，加并发只会让更多请求排队等着触达同一个延迟量级。}/{方案评审出局\\没进原型}/fdstop,
+  2/{精确匹配缓存（按查询字符串做 key）}/{真实用户是语音转写出来的口语化文本，同一个意图有大量措辞变体（「我想退货」和「这个东西能退吗」语义相同但字符串完全不同），精确匹配的命中率低到覆盖不了大促涌入的新表述 —— 而大促恰恰是新用户、新问法集中出现的场景。{\bfseries 它在最需要顶住峰值的时候恰好失效。}}/{原型测试后否决}/fdwarn,
+  3/{为提升精度引入完整的 CRAG 自纠错链路}/{完整走一遍「查询分解 → 混合检索 → 重排 → 三分类质量评估 → 必要时触发网络搜索」的深度推理链路，端到端延迟是 {\bfseries 11--20 秒}，比 300ms 的预算高出近 40 到 70 倍 —— 不是「优化一下就能压进去」的差距，是路线本身与实时语音场景的量级不兼容。（该延迟数字为论文作者单一厂商自测、测试集样本狭窄，不构成通用基准，此处只用来说明数量级。）}/{量级不兼容\\挪到链路外}/fdwarn%
+}{精简但足够准的热路径 ＋ 把重活挪到链路外。CRAG 那条链路本身的价值被保留了，只是移到离线评测与异步兜底路径，不允许出现在热路径里。}{%
+  0.15/2.62/{① 混合检索 ＋ RRF}/{先把精度提上去},
+  2.99/2.62/{② 私有化替换}/{替掉商业闭源 API，拿回延迟的控制权},
+  5.83/2.62/{③ 量化与 vLLM}/{把单次推理耗时压下来},
+  8.67/2.62/{④ 语义缓存}/{按语义而不是字符串命中},
+  11.51/2.54/{⑤ 冷启动消除}/{大促开闸前预热，不让第一批用户当小白鼠}%
+}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 43 · 下册第 1 章·底座与现场层的边界画在哪里
+% 这条线不是在合同里画的，是在仓库和构建里画的。撤场评审会上，
+% 「这部分是我们的既有产品」这句话的证明力取决于能不能拿出这四样东西。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdbaseline}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[fdout, fill=fdpale, anchor=north west, text width=13.9cm] at (0.15,0.9)
+    {合同条款：{\bfseries 本项目产生的全部源代码、文档、定制开发成果及相关知识产权，均归甲方所有。}\ \ 
+     应对办法是把代码分成两层 —— 但{\bfseries 这条线不是在合同里画的，是在仓库和构建里画的}。};
+
+  \fill[fdtint, rounded corners=3pt] (0.15,-0.15) rectangle (6.90,-1.55);
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.40,-0.28) {底座};
+  \node[fdcav, anchor=north west, text width=6.2cm] at (0.40,-0.78)
+    {项目开始{\bfseries 之前}就存在的通用组件。交付清单里它是一行「乙方 · 第三方组件」};
+  \fill[fdamber, rounded corners=3pt] (7.45,-0.15) rectangle (14.20,-1.55);
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (7.70,-0.28) {现场层};
+  \node[fdcav, anchor=north west, text width=6.2cm] at (7.70,-0.78)
+    {项目期内为这个客户写的东西。交付清单里它是一行「本项目源码」};
+  \draw[fdedgea, {Stealth[length=3.4pt]}-] (6.95,-0.85) -- (7.40,-0.85);
+  \node[font=\scriptsize, text=fdmute, anchor=south] at (7.175,-0.72) {单向};
+
+  \node[font=\bfseries\footnotesize, text=fdstop, anchor=north west] at (0.15,-1.95)
+    {撤场评审会上对方问「怎么证明」，能拿出来的只有四样东西};
+  \foreach \i/\x/\nm/\txt in {%
+    1/0.15/{两个仓库，依赖方向单向}/{现场层按版本号依赖底座的发布件，底座不许反过来引用现场层的任何东西},
+    2/3.72/{构建产物是两件，不是一件}/{底座产出带版本号的依赖包或镜像层，现场层产出随项目交付的源码包},
+    3/7.29/{版本戳能证明「先于项目」}/{底座包的版本号要对应到一个早于合同签署日的提交或 tag},
+    4/10.86/{许可声明随包走}/{底座包里带 LICENSE / NOTICE，写清授权给谁、范围、能不能转授}}{
+    \fill[fdmilk, rounded corners=3pt] (\x,-2.45) rectangle (\x+3.35,-5.15);
+    \node[fdnum] at (\x+0.42,-2.75) {\i};
+    \node[font=\bfseries\scriptsize, text=fdink, anchor=north west, text width=2.35cm, align=left]
+      at (\x+0.78,-2.55) {\nm};
+    \node[fdcav, anchor=north west, text width=2.95cm] at (\x+0.20,-3.55) {\txt};
+  }
+  \node[fdcav, anchor=north west, text width=3.35cm] at (0.15,-5.35)
+    {自查很土但有效：在底座仓库里搜客户名、客户的库表名、客户的接口地址，
+     {\bfseries 命中数必须是 0}。搜出来一条，这条边界就已经破了。};
+  \node[fdcav, anchor=north west, text width=3.35cm] at (3.72,-5.35)
+    {如果一条流水线最后吐出一个 tar，里面什么都有，那「哪些是底座」就只剩口头解释 ——
+     {\bfseries 而口头解释的证明力是零}。};
+  \node[fdcav, anchor=north west, text width=3.35cm] at (7.29,-5.35)
+    {这一条最容易被忽略，也最要命：底座若是项目做到一半时从现场层里「抽」出来的，
+     {\bfseries git 历史会诚实地记下这件事}。};
+  \node[fdcav, anchor=north west, text width=3.35cm] at (10.86,-5.35)
+    {离线包可以打成一个压缩包搬进现场，但物料清单里底座物料和现场层物料要分成两组列。};
+
+  \node[fdout, fill=fdrose, anchor=north west, text width=13.9cm] at (0.15,-7.45)
+    {{\bfseries 一个很实在的自查点：别把客户名写进底座。}
+     常见的泄露位置是包名、模块名、配置默认值、测试夹具、日志前缀、镜像 tag。
+     这几处一旦带上客户名，撤场时是把柄，换下一个客户时又得改一遍 ——
+     而且下一个客户看到前一家的名字，观感不会好。};
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.15,-8.75)
+    {反过来说，有一件事{\bfseries 不用}做：不用为了这条边界去搞两套技术栈。
+     底座和现场层可以用同一套语言、同一个框架、同一份工程基线 —— 只是不放在同一个仓库、不出同一个构建物。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 44 · 下册第 3 章·三套工具解决的不是同一个问题
+% 表格已经把三者的定位列清楚了，表格说不清的是那句关键差别：
+% 前两者产出文件、可以二选一；第三者产出的是流程本身，
+% 跟前两者根本不在一个维度上。画成两个不同的框就不会再被拿来比。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdspectools}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[font=\bfseries\scriptsize, text=fdacc, anchor=south west] at (0.15,0.12)
+    {产出文件 —— 这两个可以二选一};
+  \foreach \i/\x/\nm/\pos/\q/\out/\when/\wt in {%
+    1/0.15/{Spec Kit}/{规格流水线}/{这个新功能要做成什么样}/{{\ttfamily specs/<功能>/} 下的规格、方案、任务}/{从零造功能，团队要统一产物格式}/{重},
+    2/4.95/{OpenSpec}/{变更提案制}/{这次改动改了系统的哪些行为}/{{\ttfamily openspec/specs/}（现状）＋ {\ttfamily changes/}（提案）}/{已有系统上做增量改动，要留变更轨迹}/{轻}}{
+    \fill[fdmilk, rounded corners=3pt] (\x,-0.15) rectangle (\x+4.5,-4.35);
+    \draw[fdacc, line width=2pt] (\x,-0.15) -- (\x+4.5,-0.15);
+    \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (\x+0.25,-0.30) {\nm};
+    \node[font=\scriptsize, text=fdacc, anchor=north west] at (\x+0.25,-0.72) {\pos\ ·\ \wt};
+    \foreach \k/\y/\lb/\vv in {1/-1.25/{回答什么问题}/\q, 2/-2.20/{核心产物}/\out, 3/-3.15/{适合什么时候}/\when}{
+      \node[font=\bfseries\scriptsize, text=fdmute, anchor=north west] at (\x+0.25,\y) {\lb};
+      \node[fdcav, anchor=north west, text width=4.0cm] at (\x+0.25,\y-0.36) {\vv};
+    }
+  }
+  \node[font=\scriptsize, text=fdmute, anchor=south] at (4.72,-1.55) {二选一};
+  \draw[fdthin, {Stealth[length=3.4pt]}-{Stealth[length=3.4pt]}] (4.72,-1.90) -- (4.72,-3.60);
+
+  \node[font=\bfseries\scriptsize, text=fdwarn, anchor=south west] at (9.85,0.12)
+    {产出的不是文件，是流程本身};
+  \fill[fdamber, rounded corners=3pt] (9.85,-0.15) rectangle (14.35,-4.35);
+  \draw[fdwarn, line width=2pt] (9.85,-0.15) -- (14.35,-0.15);
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (10.10,-0.30) {Superpowers};
+  \node[font=\scriptsize, text=fdwarn, anchor=north west] at (10.10,-0.72) {工程纪律层 · 轻但强制};
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=north west] at (10.10,-1.25) {回答什么问题};
+  \node[fdcav, anchor=north west, text width=4.0cm] at (10.10,-1.61) {AI 干活时按什么规矩来};
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=north west] at (10.10,-2.20) {核心产物};
+  \node[fdcav, anchor=north west, text width=4.0cm] at (10.10,-2.56)
+    {{\bfseries 不产出规格文件}，产出的是行为约束};
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=north west] at (10.10,-3.15) {适合什么时候};
+  \node[fdcav, anchor=north west, text width=4.0cm] at (10.10,-3.51)
+    {想约束 AI 的干活方式，{\bfseries 跟用不用规格无关}};
+  \draw[fdwarn, line width=1.0pt, dash pattern=on 2.2pt off 1.8pt] (9.55,0.0) -- (9.55,-4.35);
+  \node[font=\bfseries\scriptsize, text=fdwarn, anchor=north west, text width=4.4cm] at (9.85,-4.55)
+    {它和前两者不在同一个维度上，不该被拿来和它们比较，可以叠在任何一个上面用。};
+
+  \draw[fdthin] (0,-5.75) -- (14.35,-5.75);
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.15,-5.95)
+    {怎么选：按你现在最疼的那一条选};
+  \foreach \i/\y/\sym/\lack/\fix in {%
+    1/-6.50/{需求说不清，做出来不是想要的}/{规格}/{Spec Kit（或任一规格工具）},
+    2/-7.20/{规格写了，但和代码对不上，没人敢信}/{变更轨迹}/{OpenSpec},
+    3/-7.90/{小改动也要写一堆文档，团队开始抵触}/{分档规矩}/{先定分档表，工具不用换},
+    4/-8.60/{AI 干活质量全看运气，说做完了但没验过}/{执行纪律}/{Superpowers}}{
+    \node[fdout, fill=fdmilk, anchor=north west, text width=6.4cm] at (0.15,\y) {\sym};
+    \node[font=\bfseries\scriptsize, text=fdstop, anchor=north west] at (7.05,\y-0.03) {缺的是 \lack};
+    \draw[fdedgea] (9.55,\y-0.20) -- (9.95,\y-0.20);
+    \node[fdout, fill=fdtint, anchor=north west, text width=4.1cm] at (10.10,\y) {\fix};
+  }
+  \node[fdout, fill=fdrose, anchor=north west, text width=13.9cm] at (0.15,-9.45)
+    {{\bfseries 不要三个一起上。}一次只解决当下最疼的那一条 ——
+     否则团队的注意力全花在学工具上，没花在交付上。
+     非要一个默认推荐：新项目从 Spec Kit 起步，系统跑起来之后把日常增量改成 OpenSpec 的提案制，
+     全程叠一层 Superpowers 的执行纪律。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 45 · 下册第 4 章·遗留系统对接的四种方式
+% 四种没有绝对优劣，只有「在这个客户的约束下选哪个坑最小」。
+% 图上按「最危险的失败模式」排——定长报文那条排在最前，
+% 因为它是唯一一种出错时不报错的，静默数据损坏比连接失败危险得多。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdlegacy}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south west] at (0.15,0.12)
+    {四种方式没有绝对优劣，只有「在这个客户的约束条件下选哪个坑最小」};
+  \node[font=\bfseries\scriptsize, text=fdstop, anchor=south east] at (14.35,0.12)
+    {出错时会不会报错};
+
+  \foreach \i/\y/\nm/\what/\risk/\level/\col in {%
+    1/0/{固定长度报文}/{每个字段按固定的字节偏移量和长度排布，没有 JSON · XML 那样的自解释分隔符。编码经常是 EBCDIC，数值字段常用压缩十进制，补位规则各家不统一}/{{\bfseries 最危险的失败模式是它不会报错。}某个字段的长度定义理解错了，解析代码只会把后续所有字段错位地读出一堆「看起来合理但完全错误」的值 —— 可能在生产环境里默默跑很久才被发现}/{不报错\\静默数据损坏}/fdstop,
+    2/-3.20/{数据库直连}/{直接连遗留系统底层数据库读写，跳过它自己的应用层。实现起来往往最快}/{schema 变更完全不会通知你 —— 供应商升级一次版本、加一列改一个字段类型，集成代码可能悄无声息读到错误数据。且绕过应用层就是绕过它的业务校验和触发器}/{半数不报错}/fdstop,
+    3/-6.40/{文件交换 · FTP · SFTP}/{一方把数据文件放到约定目录，另一方轮询或被通知后读取。批量、异步}/{{\bfseries 大文件写入不是原子操作。}接收端在文件还没写完时就开始读，会读到一份不完整的数据。标准解法是「完成标记文件」约定：数据文件写完之后再写一个空的 {\ttfamily .done} 标记，接收端只认标记}/{读到半截\\不一定报错}/fdwarn,
+    4/-9.60/{SOAP · WSDL}/{契约先行，每个字段类型在 WSDL 里静态声明，客户端可直接生成强类型调用代码。认证走 WS-Security 头，不是 HTTP 层的 Bearer token}/{开发与生产的 WSDL 版本经常不同步 —— 照旧 WSDL 生成的客户端会报「缺少必需元素」。信封本身冗长，老旧应用服务器的请求体大小限制容易被打满，而报错常常只是笼统的连接被重置}/{会报错\\但信息不准}/fdwarn%
+  }{
+    \fill[fdmilk, rounded corners=3pt] (0.15,\y) rectangle (14.05,\y-3.00);
+    \draw[\col, line width=2.2pt] (0.15,\y) -- (0.15,\y-3.00);
+    \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.42,\y-0.12) {\nm};
+    \node[fdout, fill=\col!20, anchor=north east, text width=2.5cm, align=center]
+      at (13.85,\y-0.12) {{\bfseries\color{\col}\level}};
+    \node[fdcav, anchor=north west, text width=5.3cm] at (0.42,\y-0.72) {\what};
+    \node[font=\bfseries\scriptsize, text=\col, anchor=north west] at (6.10,\y-0.72) {最危险的坑};
+    \node[fdcav, anchor=north west, text width=4.9cm] at (6.10,\y-1.10) {\risk};
+  }
+
+  \node[fdout, fill=fdamber, anchor=north west, text width=13.9cm] at (0.15,-13.00)
+    {{\bfseries 定长报文的防御手段是唯一不能省的一条：}给每条报文强制做结构校验 ——
+     记录长度、字段数量对不上就立刻拒绝并告警；同时尽量要求对方在报文末尾提供校验位或记录数汇总字段用于交叉核对。
+     {\bfseries 一次明显的连接失败是好事，静默错位不是。}};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 46 · 下册第 5 章·分块策略要反过来选
+% 大多数团队先纠结「固定长度还是语义分块」，真正该先问的是
+% 「这份文档的自然结构单元是什么」。图上把顺序倒过来画。
+% 底下两条是祛魅：语义分块不是碾压，10--20% 重叠查无实据。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdchunking}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[fdout, fill=fdrose, anchor=north west, text width=6.75cm] at (0.15,0.9)
+    {{\bfseries\color{fdstop}× 大多数团队的顺序}\\[1.5pt]
+     先选算法（固定长度？语义？），再拿文档去套 —— 削足适履};
+  \node[fdout, fill=fdtint, anchor=north west, text width=6.75cm] at (7.45,0.9)
+    {{\bfseries\color{fdacc}✓ 应该的顺序}\\[1.5pt]
+     先问「这份文档的{\bfseries 自然结构单元}是什么」，策略服从结构};
+  \draw[fdedgea, line width=1.2pt] (7.00,0.35) -- (7.40,0.35);
+
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south west] at (0.15,-1.00)
+    {先认自然单元（工程归纳，按结构特点推导，非单篇论文的逐类型实证）};
+  \foreach \i/\y/\doc/\unit/\stg/\why in {%
+    1/-1.35/{合同}/{条款 · 款项（有编号层级）}/{层级分块}/{固定长度会把一个条款拦腰切断，检索到的片段是「半句话」，无法直接引用},
+    2/-2.50/{手册 · 技术文档}/{标题层级 H1 / H2 / H3}/{层级分块}/{语义边界由标题划定；每个 chunk 附带所属标题路径当元数据，弥补脱离上下文后的语义不完整},
+    3/-3.65/{表格}/{行 · 逻辑行组}/{整表一个 chunk}/{拆散表格等同于丢失行列对应关系；不大时整表一块，大表按行组切且每块携带表头},
+    4/-4.80/{代码}/{函数 · 类 · 模块}/{语法感知分块}/{固定长度极大概率把一个函数从中间切断，产生的块既不能独立编译也不能独立理解},
+    5/-5.95/{对话 · 工单记录}/{一轮问答 · 一个完整会话}/{按会话边界}/{单条孤立发言常语义不完整（「好的，那就这么定」脱离上下文毫无意义）}}{
+    \fill[fdmilk, rounded corners=2.6pt] (0.15,\y) rectangle (14.05,\y-1.05);
+    \node[font=\bfseries\scriptsize, text=fdink, anchor=north west] at (0.40,\y-0.10) {\doc};
+    \node[font=\scriptsize, text=fdmute, anchor=north west] at (2.55,\y-0.10) {\unit};
+    \node[font=\bfseries\scriptsize, text=fdacc, anchor=north west] at (5.95,\y-0.10) {\stg};
+    \node[fdcav, anchor=north west, text width=5.5cm] at (8.35,\y-0.08) {\why};
+  }
+
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=north west] at (0.15,-7.25)
+    {三种策略不是效果排名，是按「有没有显式结构、结构可不可靠」做的选择};
+  \foreach \i/\x/\nm/\cond in {%
+    1/0.15/{层级分块}/{文档自带可靠的结构标记（标题、条款编号）—— 不需要靠语义相似度去猜边界，文档自己已经标出来了},
+    2/4.90/{语义分块}/{没有显式结构标记，但内容确实有主题边界 —— 按语义相似度动态确定切分点},
+    3/9.65/{固定长度分块}/{两者都没有时兜底。实现简单、速度快、成本低，适用于新闻正文这类无明显结构边界的纯文本}}{
+    \node[fdout, fill=fdtint, anchor=north west, text width=4.15cm] at (\x,-7.70)
+      {{\bfseries\nm}\\[1.5pt]\cond};
+  }
+
+  \node[fdout, fill=fdamber, anchor=north west, text width=6.75cm] at (0.15,-9.65)
+    {{\bfseries 祛魅一：语义分块不是碾压性优势，是权衡。}
+     同一评测集上，固定长度分块召回率 88.1\% · 精确率 7.0\%；语义分块召回率 87.3\% · 精确率 8.0\% ——
+     {\bfseries 精确率略高但召回率反而略低，幅度都不到 1 个百分点}。
+     （该数据来自 Chroma 自己的研究报告，Chroma 本身也是被测方法的提出方之一，存在自我背书倾向。）};
+  \node[fdout, fill=fdamber, anchor=north west, text width=6.75cm] at (7.45,-9.65)
+    {{\bfseries 祛魅二：「重叠设为 10\%--20\%」查无实据。}
+     这个说法在工程博客里反复出现，但本书调研没有找到任何权威一手出处能验证这个区间。
+     LlamaIndex 官方默认值实际是 {\ttfamily chunk\_size=1024, chunk\_overlap=20}，
+     重叠占比约 {\bfseries 2\%}，远低于流传的区间；Pinecone 官方分块策略页面全文没有出现任何具体的重叠百分比建议。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 47 · 下册第 7 章·系统级 Prompt 的四层
+% 分层的价值不是好看，是可维护。四层按「稳定 → 易变」排，
+% 层号越小改动越谨慎、评审门槛越高——把变更节奏画出来，
+% 就能看出为什么混在一起会让高频变化的部分把低频但重要的约束稀释掉。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdpromptlayers}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[fdout, fill=fdrose, anchor=north west, text width=13.9cm] at (0.15,0.9)
+    {把「你是一个客服助手」和「用户的具体问题」堆在同一层里，会有三个后果：
+     改一次业务规则要通读全篇找哪句话要改；出了问题说不清是哪一层在起作用；
+     团队协作时容易互相覆盖对方的改动。};
+
+  \foreach \i/\y/\nm/\what/\when/\gate/\col in {%
+    1/-0.20/{身份与边界层}/{模型是谁、扮演什么角色、能做什么、{\bfseries 绝对不能做什么}。例如「不得承诺具体退款金额」「不得执行不可逆操作」}/{几乎不随业务迭代变化}/{改动要走正式评审流程}/fdstop,
+    2/-1.95/{能力与工具层}/{可用工具清单、每个工具的调用条件、工具之间的优先级。例如「先查库存工具，库存不足才允许查询替代品工具」}/{工具增减时改这一层}/{进代码评审}/fdwarn,
+    3/-3.70/{风格与输出格式层}/{语气、结构化输出的 schema、多轮对话中的引用规范}/{产品迭代时改这一层}/{常规评审}/fdwarn,
+    4/-5.45/{任务与上下文层}/{当次请求的具体任务、检索到的上下文、对话历史}/{{\bfseries 每次请求都不同}}/{由检索管道动态拼装}/fdacc}{
+    \fill[fdmilk, rounded corners=3pt] (1.35,\y) rectangle (14.05,\y-1.55);
+    \draw[\col, line width=2.2pt] (1.35,\y) -- (1.35,\y-1.55);
+    \node[fdnum, draw=\col, text=\col] at (0.85,\y-0.32) {\i};
+    \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (1.62,\y-0.12) {\nm};
+    \node[fdcav, anchor=north west, text width=6.7cm] at (1.62,\y-0.62) {\what};
+    \node[font=\scriptsize, text=fdmute, anchor=north west] at (8.75,\y-0.14) {\when};
+    \node[fdout, fill=\col!16, anchor=north east, text width=3.2cm, align=center]
+      at (13.85,\y-0.60) {{\bfseries\color{\col}\gate}};
+  }
+  \shade[left color=fdstop!45, right color=fdacc!45, rounded corners=2pt]
+    (0.15,-0.20) rectangle (0.50,-7.00);
+  \node[font=\scriptsize, text=fdmute, anchor=north west] at (0.02,-7.12) {稳定 → 易变};
+
+  \node[fdout, fill=fdamber, anchor=north west, text width=13.9cm] at (0.15,-7.70)
+    {{\bfseries 分层的直接好处是可以分别版本化。}身份边界层进代码评审流程，任务上下文层由检索管道动态拼装 ——
+     两者的变更节奏完全不同，{\bfseries 混在一起会让高频变化的部分把低频但重要的约束「稀释」掉}。
+     而且上下文越长，模型对靠前的强约束的遵从度会随位置和总长度衰减（见 §7.2）。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 48 · 下册第 7 章·微调 vs RAG vs Prompt
+% 三条路线解决的是不同层面的问题，这句话说起来是常识，
+% 但实际项目里最常见的错误恰恰是拿错工具。所以图的第一行
+% 不是判据，是「各自解决什么问题」——先认清病，再选药。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdfinetune}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \foreach \i/\x/\nm/\prob/\col in {%
+    1/0.15/{Prompt 工程}/{解决「{\bfseries 模型已经会，但没有被正确引导}」—— 格式不对、语气不对、没按预期的推理步骤走}/fdacc,
+    2/4.90/{RAG}/{解决「{\bfseries 模型不知道}」—— 私有数据、时效性信息、需要频繁更新的知识}/fdacc,
+    3/9.65/{微调 · LoRA}/{解决「{\bfseries 模型知道，但表现方式或推理模式需要系统性调整}」—— 特定领域术语体系、需要内化而非临时被告知的行为模式}/fdwarn}{
+    \fill[fdmilk, rounded corners=3pt] (\x,0) rectangle (\x+4.5,-2.45);
+    \draw[\col, line width=2pt] (\x,0) -- (\x+4.5,0);
+    \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (\x+0.25,-0.14) {\nm};
+    \node[fdcav, anchor=north west, text width=4.0cm] at (\x+0.25,-0.66) {\prob};
+  }
+  \node[font=\bfseries\scriptsize, text=fdstop, anchor=north west] at (0.15,-2.65)
+    {实际项目里最常见的错误恰恰是拿错了工具：知识本该放进检索库，却花几周去微调；措辞风格问题本该改 prompt，却直接上了 LoRA};
+
+  \foreach \i/\y/\dim/\a/\b/\c in {%
+    1/-3.30/{数据量}/{几个到几十个示例就能用 few-shot 说清楚}/{知识库从几十到无上限文档，且持续增长}/{需要成百上千条高质量标注样本，不足时效果不稳定},
+    2/-4.60/{领域偏移度}/{通用能力，模型预训练知识已覆盖}/{私有 · 时效性知识，模型预训练时不可能见过}/{术语体系与通用预训练分布差异大，靠上下文提示难以稳定纠偏},
+    3/-5.90/{延迟要求}/{最优，无额外调用开销}/{中等，多一次检索}/{推理时最优，但要承担模型部署与版本管理的运维成本},
+    4/-7.20/{维护成本}/{{\bfseries 最低}，改 prompt 即生效}/{中等，要维护索引更新流水线}/{{\bfseries 最高}，数据分布一变可能要重新微调，且需独立的评估 · 灰度 · 回滚}}{
+    \fill[fdmilk, rounded corners=2.6pt] (0.15,\y) rectangle (14.05,\y-1.20);
+    \node[font=\bfseries\scriptsize, text=fdink, anchor=north west] at (0.40,\y-0.12) {\dim};
+    \node[fdcav, anchor=north west, text width=3.9cm] at (2.55,\y-0.10) {\a};
+    \node[fdcav, anchor=north west, text width=3.9cm] at (6.75,\y-0.10) {\b};
+    \node[fdcav, anchor=north west, text width=3.9cm] at (10.10,\y-0.10) {\c};
+  }
+
+  \node[fdout, fill=fdrose, anchor=north west, text width=13.9cm] at (0.15,-8.70)
+    {{\bfseries 微调不是「效果不好就微调」的万能升级路径。}值得做的前提通常要{\bfseries 同时}满足四条：\\[2pt]
+     ① prompt 工程和 RAG 已经尝试过，且{\bfseries 有实测证据}显示效果仍不达标，而不是「感觉应该微调」。\\
+     ② 问题的性质是「行为模式」而非「知识缺失」—— 补几个示例或几篇文档就能解决的，说明不需要动权重。\\
+     ③ 有稳定、规模足够、质量有保障的训练数据来源，且分布在可预见的未来不会频繁大改。\\
+     ④ 团队具备或愿意投入持续的模型版本管理能力 —— 微调出来的权重是一个新的、需要独立测试和维护的资产。};
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.15,-11.00)
+    {QLoRA 相比全参数微调的价值在于用量化降低显存需求，让消费级或单卡环境也能做参数高效微调。
+     但它解决的是「训练成本」问题，{\bfseries 不改变「什么时候该微调」这个决策本身}——
+     训练成本降低不能作为「更早启动微调」的理由，上面四条该满足几条还是几条。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 49 · 下册第 8 章·gpu-memory-utilization 是「预留」，不是「上限」
+% 这一条和直觉相反，而且是实测出来的：0.85 加载一个 0.5B 的小模型，
+% 显存占用 21.2GB / 24.5GB。画成一条显存条，两个反直觉的后果就不用解释了。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdgpumem}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[fdout, fill=fdrose, anchor=north west, text width=13.9cm] at (0.15,0.9)
+    {{\bfseries 直觉：}{\ttfamily gpu\_memory\_utilization} 是一个上限 —— 模型小，占的显存就少。\\[2pt]
+     {\bfseries\color{fdstop}实际：它是预留比例。vLLM 按比例把显存整块划走，模型权重用不完的部分全部转成 KV Cache。}};
+
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=north west] at (0.15,-0.75)
+    {实测：RTX 4090（24.5GB）· vLLM 0.26.0 · {\ttfamily gpu\_memory\_utilization=0.85} · 加载一个 {\bfseries 0.5B} 的小模型};
+  \fill[fdpale, rounded corners=2.6pt] (0.15,-1.30) rectangle (14.05,-2.55);
+  \fill[fdacc!35] (0.18,-1.30) rectangle (0.78,-2.55);
+  \fill[fdwarn!30] (0.78,-1.30) rectangle (12.05,-2.55);
+  \draw[fdline, line width=0.7pt, rounded corners=2.6pt] (0.15,-1.30) rectangle (14.05,-2.55);
+  \draw[fdstop, line width=1.2pt] (12.05,-1.18) -- (12.05,-2.67);
+  \node[font=\bfseries\footnotesize, text=fdink] at (6.40,-1.72) {KV Cache};
+  \node[font=\scriptsize, text=fdmute] at (6.40,-2.12) {模型权重用不完的部分，全部转成它};
+  \node[font=\scriptsize, text=fdacc, anchor=north west] at (0.15,-2.68) {模型权重（很小）};
+  \node[font=\bfseries\scriptsize, text=fdstop, anchor=north east] at (12.00,-2.68) {21.2GB · 85\% 被整块划走};
+  \node[font=\scriptsize, text=fdmute, anchor=north west] at (12.15,-2.68) {卡总共 24.5GB};
+
+  \node[fdout, fill=fdamber, anchor=north west, text width=6.75cm] at (0.15,-3.35)
+    {{\bfseries 后果一：你没法靠调小模型来省显存。}
+     换个更小的模型，划走的还是 85\%，只是 KV Cache 那块更大。
+     这不是浪费 —— KV Cache 越大能并发的请求越多，是设计。};
+  \node[fdout, fill=fdamber, anchor=north west, text width=6.75cm] at (7.45,-3.35)
+    {{\bfseries 后果二：同一张卡上起第二个实例会直接失败。}
+     第一个已经把 85\% 划走了。帮助文本里那句
+     {\ttfamily This is a per-instance limit} 说的就是这个。};
+
+  \node[fdout, fill=fdmilk, anchor=north west, text width=13.9cm] at (0.15,-5.20)
+    {{\bfseries 顺带纠正一个流传很广但已经过时的说法：PagedAttention 不是 vLLM 现在的核心卖点。}
+     （已实测：在装好 vLLM 0.26.0 的机器上 {\ttfamily import vllm.attention.ops.paged\_attn} 直接 {\ttfamily ModuleNotFoundError}，模块确实不在了。）
+     随着新引擎成为唯一路径，早期那套独立实现已经被删除 —— 不是「分页管理 KV cache」这个思路被放弃，
+     是它作为一套独立的遗留实现被整合进了新架构。市面上大量还在把它当卖点介绍的资料，说的是早期版本的架构。};
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.15,-7.00)
+    {查参数默认值时还有一个坑：{\ttfamily vllm serve --help} 只列出配置分组，{\bfseries 不列具体参数}——
+     想看到带默认值的完整列表要用 {\ttfamily --help=all}（实测输出 1831 行）。
+     照着老教程直接 {\ttfamily --help | grep} 会一无所获，误以为参数不存在。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 50 · 下册第 9 章·检索指标与生成指标必须分开测
+% 混在一个端到端准确率里，出问题了都不知道该往哪查。
+% 三个检索指标各自的陷阱画在旁边，最后那条 k 值对齐最容易踩。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdragmetrics}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[fdout, fill=fdrose, anchor=north west, text width=13.9cm] at (0.15,0.9)
+    {RAG 出问题，可能是检索没找到对的文档，也可能是找到了但生成环节没用好。
+     {\bfseries 两个环节混在一个端到端准确率里评估，出问题了都不知道该往哪查。}};
+
+  \node[fdcard, fill=fdmilk, draw=none, anchor=north west, minimum width=3.0cm] (q) at (0.15,-0.15) {查询};
+  \fill[fdtint, rounded corners=3pt] (3.55,-0.15) rectangle (8.55,-1.05);
+  \node[font=\bfseries\footnotesize, text=fdink] at (6.05,-0.60) {检索环节};
+  \fill[fdamber, rounded corners=3pt] (9.05,-0.15) rectangle (14.05,-1.05);
+  \node[font=\bfseries\footnotesize, text=fdink] at (11.55,-0.60) {生成环节};
+  \draw[fdedgea] (3.20,-0.60) -- (3.50,-0.60);
+  \draw[fdedgea] (8.60,-0.60) -- (9.00,-0.60);
+  \node[font=\bfseries\scriptsize, text=fdacc, anchor=north] at (6.05,-1.15) {Recall@k · MRR · nDCG};
+  \node[font=\bfseries\scriptsize, text=fdwarn, anchor=north] at (11.55,-1.15)
+    {Faithfulness · Answer Relevancy};
+
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=north west] at (0.15,-1.85)
+    {三个检索指标都有陷阱};
+  \foreach \i/\y/\nm/\trap in {%
+    1/-2.30/{chunk 级 recall vs document 级 recall}/{长文档切成多个 chunk 后，{\bfseries 只要命中其中一个 chunk，document-level recall 就会显得虚高}—— 掩盖了「实际有用的那个 chunk 没被检索到」这个真实问题},
+    2/-3.35/{MRR 只关心第一个相关结果的位置}/{不适合需要综合多篇文档才能回答的多跳问答 ——{\bfseries MRR 很高不代表系统真的能拼凑出完整答案}},
+    3/-4.40/{nDCG 是三者里最贴近生产的一个}/{能处理分级相关性，且天然对「用户只看前几条」的真实使用习惯建模}}{
+    \fill[fdmilk, rounded corners=2.6pt] (0.15,\y) rectangle (14.05,\y-0.95);
+    \node[font=\bfseries\scriptsize, text=fdink, anchor=north west, text width=4.5cm, align=left]
+      at (0.40,\y-0.10) {\nm};
+    \node[fdcav, anchor=north west, text width=8.7cm] at (5.15,\y-0.08) {\trap};
+  }
+
+  \node[fdout, fill=fdamber, anchor=north west, text width=13.9cm] at (0.15,-5.60)
+    {{\bfseries 更容易被忽视的一条：k 值应该和生产 pipeline 实际塞进 prompt 的 chunk 数对齐。}
+     生产只取 top-3，评估却算 Recall@20，会得到过于乐观的检索指标。
+     这是工程共识，不是单篇论文的实证结论，但极容易在实际项目里踩坑。};
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.15,-6.90)
+    {{\bfseries BLEU / ROUGE 在企业场景为什么失效：}它们衡量的是与参考答案的表面相似度，
+     适合有相对固定标准答案的任务。企业场景里同一个业务问题往往有多种合理措辞的正确答案。
+     {\bfseries 但这不代表它们一无是处}—— 在回归测试场景，拿新回答去和「已知历史正确答案」比对表面相似度，
+     恰恰是它们擅长的事。新颖问题评估和回归评估是两个不同任务，不要用同一套指标覆盖。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 51 · 下册第 9 章·三类裁判偏差，以及它们在不同评委上的实测差距
+% 这一节最有用的不是「有三类偏差」，是同一类偏差在不同评委模型上
+% 差出好几倍。把论文里的实测数字并排画出来，
+% 「选哪个模型当评委本身就要单独评估」这句话就不用论证了。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdjudgebias}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[fdout, fill=fdrose, anchor=north west, text width=13.9cm] at (0.15,0.9)
+    {三类系统性偏差如果不处理，评出来的分数{\bfseries 比不评估更危险}——
+     它会让你对一个有问题的系统产生虚假的信心。};
+
+  % 一、位置偏差
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.15,-0.15)
+    {位置偏差 —— 谁先出现谁占便宜};
+  \node[fdcav, anchor=north west, text width=4.4cm] at (0.15,-0.60)
+    {测法：交换两个候选答案的呈现顺序后，评委给出的判断会不会跟着变。
+     数值是{\bfseries 冲突率}，越低越好。};
+  \foreach \i/\y/\lb/\v/\col in {%
+    1/-0.68/{GPT-4 当评委 · 场景 A}/46.3/fdwarn,
+    2/-1.28/{GPT-4 当评委 · 场景 B}/5.0/fdacc,
+    3/-1.88/{ChatGPT 当评委 · 场景 A}/82.5/fdstop,
+    4/-2.48/{ChatGPT 当评委 · 场景 B}/52.5/fdstop}{
+    \node[font=\scriptsize, text=fdink, anchor=east] at (8.15,\y-0.22) {\lb};
+    \fill[\col!40, rounded corners=1.4pt] (8.30,\y) rectangle ({8.30+0.062*\v},\y-0.44);
+    \node[font=\bfseries\scriptsize, text=fdink, anchor=west] at ({8.30+0.062*\v+0.12},\y-0.22) {\v\%};
+  }
+  \node[fdcav, anchor=north west, text width=4.4cm] at (0.15,-2.10)
+    {{\bfseries ChatGPT 当评委时的位置偏差远比 GPT-4 严重。}};
+
+  % 二、冗长偏差
+  \draw[fdthin] (0,-3.55) -- (14.35,-3.55);
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.15,-3.75)
+    {冗长偏差 —— 写得长比写得对更容易得高分};
+  \node[fdcav, anchor=north west, text width=4.4cm] at (0.15,-4.20)
+    {测法：把答案改写成重复堆砌、看起来详尽实则空洞的列表，看评委会不会被唬住。
+     数值是{\bfseries 失败率}，越低越好。};
+  \foreach \i/\y/\lb/\v/\col in {%
+    1/-4.28/{Claude-v1}/91.3/fdstop, 2/-4.88/{GPT-3.5}/91.3/fdstop, 3/-5.48/{GPT-4}/8.7/fdacc}{
+    \node[font=\scriptsize, text=fdink, anchor=east] at (8.15,\y-0.22) {\lb};
+    \fill[\col!40, rounded corners=1.4pt] (8.30,\y) rectangle ({8.30+0.062*\v},\y-0.44);
+    \node[font=\bfseries\scriptsize, text=fdink, anchor=west] at ({8.30+0.062*\v+0.12},\y-0.22) {\v\%};
+  }
+  \node[fdcav, anchor=north west, text width=4.4cm] at (0.15,-5.60)
+    {加 few-shot 锚定示例能把 GPT-4 的位置一致性从 65.0\% 提到 77.5\%。};
+
+  % 三、自我偏好
+  \draw[fdthin] (0,-6.55) -- (14.35,-6.55);
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.15,-6.75)
+    {自我偏好偏差 —— 评委偏爱自己的文风，但不是所有模型都一样};
+  \node[fdcav, anchor=north west, text width=4.4cm] at (0.15,-7.20)
+    {数值是评委给自己的{\bfseries 胜率加成}。研究还发现：模型识别「这是不是自己写的」的能力，
+     与它偏爱自己输出的强度呈线性相关。};
+  \foreach \i/\y/\lb/\v/\col in {%
+    1/-7.28/{Claude-v1}/25/fdstop, 2/-7.88/{GPT-4}/10/fdwarn, 3/-8.48/{GPT-3.5}/0/fdacc}{
+    \node[font=\scriptsize, text=fdink, anchor=east] at (8.15,\y-0.22) {\lb};
+    \fill[\col!40, rounded corners=1.4pt] (8.30,\y) rectangle ({8.30+0.062*\v*3.6},\y-0.44);
+    \node[font=\bfseries\scriptsize, text=fdink, anchor=west] at ({8.30+0.062*\v*3.6+0.12},\y-0.22)
+      {\ifnum\v=0 没有表现出自我偏好\else ＋\v\%\fi};
+  }
+
+  \node[fdout, fill=fdamber, anchor=north west, text width=13.9cm] at (0.15,-9.30)
+    {{\bfseries 所以「选哪个模型当评委」本身就是一个要单独评估的选型决策，不是「随便挑一个强模型当裁判就行」。}
+     做法是：至少用黄金集里已经有人工标注的一小部分数据，跑一遍候选评委模型的判断，和人工标注的一致率对比 ——
+     据此决定用谁当 CI 门禁里的裁判，而不是默认拿手头最贵的模型顶上去。};
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.15,-10.70)
+    {{\bfseries 缓解不是消除。}位置偏差三重校准叠加之后，GPT-4 的最终准确率提升到 73.8\%（＋9.8pp），
+     ChatGPT 到 71.3\%（＋14.3pp）——{\bfseries 即便加了三重校准，也没有回到接近 100\%}。
+     偏差只能压低，压不平。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 52 · 下册第 11 章·信创绕不开的三层压力，与三层技术栈的证据成色
+% 上半那句很反常识：不存在一份全国统一的强制信创采购比例政策文本。
+% 下半按证据成色给三层技术栈上色——这正是这一章反复在做的事：
+% 官方原文、媒体转述、社区实践，不能混着当依据用。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdxinchuangstack}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[fdout, fill=fdrose, anchor=north west, text width=13.9cm] at (0.15,0.9)
+    {{\bfseries「信创」不是任何一条法规里定义的法定术语，也不存在一份全国统一的「强制信创采购比例」政策文本。}
+     这一条很反常识，值得记住 —— 客户说「我们必须信创」时，先问一句：
+     {\bfseries 这个要求具体落在哪一份标书条款或哪份内部制度里？}};
+
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.15,-0.45)
+    {但「绕不开」这个判断站得住，理由不是某一条法规，是三层现实压力叠加};
+  \foreach \i/\x/\nm/\txt in {%
+    1/0.15/{采购评分项}/{国企 · 银行 · 政务的招投标文件经常直接写明技术栈需在信创名录内。{\bfseries 一旦写进标书就是硬门槛，不是加分项}—— 绕开条款去谈业务价值，说服不了卡流程的人},
+    2/4.90/{数据本地化的法律驱动}/{网安法 §31 / §37 要求关基运营者境内产生的数据境内存储。{\bfseries 这条本身不规定硬件必须国产}，但客户一旦不允许境外云 GPU 或境外模型 API，路径自然收窄到本地部署，再叠加采购要求就收窄到国产栈},
+    3/9.65/{否决权结构}/{银行的科技口卡变更审批、国企的采购口卡流程选择 —— 这两个环节的负责人对「是否符合信创要求」通常{\bfseries 没有商量余地}}}{
+    \node[fdout, fill=fdamber, anchor=north west, text width=4.15cm] at (\x,-1.00)
+      {{\bfseries 第 \i\ 层 · \nm}\\[1.5pt]\txt};
+  }
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.15,-3.95)
+    {这意味着「信创改造要不要做」在立项阶段基本已经被回答了。
+     FDE 能做的是把工程基线、容器化部署与推理优化、国产模型选型，{\bfseries 在信创约束下重新拼一遍}。};
+
+  \draw[fdthin] (0,-4.85) -- (14.35,-4.85);
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.15,-5.05)
+    {三层技术栈 —— 右边一栏是本书能拿到的证据成色，不同成色不能混着当依据用};
+  \foreach \i/\y/\nm/\what/\ev/\lv/\col in {%
+    1/-5.60/{算力层}/{昇腾 NPU（CANN ＋ MindIE）· 国产 GPU（寒武纪 · 海光 · 摩尔线程）· 纯 CPU 降级}/{官方文档给流程；第三方给的性能倍数说法彼此矛盾时不采信任何一方}/{官方文档\\＋ 本书实测}/fdacc,
+    2/-7.35/{基础软件层}/{麒麟 · 统信 UOS 操作系统；达梦 · OceanBase · 人大金仓数据库的向量能力}/{兼容性数字来自厂商对外宣传口径的{\bfseries 媒体转述}，未直接抓取官网逐字核对。{\bfseries 不能当成精确的兼容性认证数字写进交付方案}}/{媒体转述\\需降级处理}/fdwarn,
+    3/-9.10/{云原生层}/{KubeSphere 在信创环境的混合架构部署；Higress 网关}/{社区 · 合作伙伴技术文章级别的实践记录，{\bfseries 不是官方发布的正式兼容性认证清单}。Higress 没有针对麒麟 · UOS · ARM64 的专门支持声明}/{社区实践\\非官方认证}/fdstop}{
+    \fill[fdmilk, rounded corners=3pt] (0.15,\y) rectangle (14.05,\y-1.60);
+    \draw[\col, line width=2.2pt] (0.15,\y) -- (0.15,\y-1.60);
+    \node[font=\bfseries\scriptsize, text=fdink, anchor=north west] at (0.42,\y-0.12) {\nm};
+    \node[fdcav, anchor=north west, text width=4.0cm] at (0.42,\y-0.55) {\what};
+    \node[fdcav, anchor=north west, text width=6.3cm] at (4.75,\y-0.10) {\ev};
+    \node[fdout, fill=\col!18, anchor=north east, text width=2.6cm, align=center]
+      at (13.85,\y-0.30) {{\bfseries\color{\col}\lv}};
+  }
+  \node[fdout, fill=fdrose, anchor=north west, text width=13.9cm] at (0.15,-11.05)
+    {{\bfseries 这是本章最主要的信息缺口：三层都没有任何一方项目方发布正式的信创环境官方兼容性认证或性能基准数据。}
+     项目立项阶段应该主动向厂商索要针对{\bfseries 具体推理框架版本}的兼容性证明 ——
+     不能假设「通过了等保认证」就等同于「AI 技术栈已验证兼容」。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 53 · 下册第 16 章·13 周时间线
+% 13 周不是拍出来的数字，它对应五个阶段。表格一行一周，
+% 看不出「核心工程能力攻坚占了七周」这个配比——画成时间轴就看得出。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdplan}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \def\WX{1.55}\def\WK{0.97}    % 起点与每周宽度
+  % 周次刻度
+  \foreach \w in {1,...,13}{
+    \node[font=\scriptsize, text=fdmute, anchor=south] at ({\WX+(\w-0.5)*\WK},0.12) {\w};
+    \draw[fdthin] ({\WX+(\w-1)*\WK},0.02) -- ({\WX+(\w-1)*\WK},-1.75);
+  }
+  \draw[fdthin] ({\WX+13*\WK},0.02) -- ({\WX+13*\WK},-1.75);
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=east] at (\WX-0.15,0.25) {周次};
+
+  % 五个阶段。一周宽的格子塞不下阶段名，所以名字统一放到下面那一行图例里
+  \foreach \i/\a/\n/\col in {1/1/1/fdmute, 2/2/1/fdmute, 3/3/7/fdacc,
+                             4/10/2/fdwarn, 5/12/1/fdstop, 6/13/1/fdmute}{
+    \fill[\col!30, rounded corners=2.4pt]
+      ({\WX+(\a-1)*\WK+0.05},-0.08) rectangle ({\WX+(\a-1+\n)*\WK-0.05},-0.62);
+  }
+  \node[font=\bfseries\scriptsize, text=fdink] at ({\WX+6.5*\WK},-0.35) {核心工程能力攻坚};
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=east] at (\WX-0.15,-0.35) {阶段};
+
+  % 动手 Lab
+  \foreach \w/\lab in {2/{11}, 3/{05}, 5/{02}, 6/{01}, 7/{03},
+                       8/{04·06}, 9/{07·08}, 10/{10}, 11/{09}, 12/{12}}{
+    \fill[fdtint, rounded corners=1.6pt]
+      ({\WX+(\w-1)*\WK+0.05},-0.95) rectangle ({\WX+\w*\WK-0.05},-1.48);
+    \node[font=\bfseries\scriptsize, text=fdacc, anchor=center] at ({\WX+(\w-0.5)*\WK},-1.22) {\lab};
+  }
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=east] at (\WX-0.15,-1.22) {动手 Lab（编号）};
+
+  \node[font=\bfseries\scriptsize, text=fdacc, anchor=north west] at (0.15,-1.95)
+    {十三周里有七周在「核心工程能力攻坚」这一段 —— 这不是排版巧合，是这份计划的重心};
+
+  % 阶段图例
+  \foreach \i/\x/\rg/\nm in {%
+    1/0.15/{第 1 周}/{认知定位}, 2/2.55/{第 2 周}/{需求与定界},
+    3/4.95/{第 3--9 周}/{核心工程能力攻坚}, 4/8.15/{第 10--11 周}/{案例与中国市场},
+    5/11.05/{第 12 周}/{毕业项目}, 6/12.85/{第 13 周}/{复盘与作品集}}{
+    \node[font=\scriptsize, text=fdmute, anchor=north west] at (\x,-2.45) {\rg};
+    \node[font=\bfseries\scriptsize, text=fdink, anchor=north west, text width=2.3cm, align=left]
+      at (\x,-2.80) {\nm};
+  }
+
+  \draw[fdthin] (0,-3.60) -- (14.35,-3.60);
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=north west] at (0.15,-3.75) {每周主题};
+  \foreach \i/\x/\y/\w/\tp in {%
+    1/0.15/-4.20/1/{认知定位}, 2/4.90/-4.20/2/{需求发现与定界}, 3/9.65/-4.20/3/{薄切片与评估},
+    4/0.15/-4.80/4/{生产推广与工程基线}, 5/4.90/-4.80/5/{企业集成}, 6/9.65/-4.80/6/{数据管道与本体},
+    7/0.15/-5.40/7/{Agent 编排与遗留系统}, 8/4.90/-5.40/8/{检索质量与高并发}, 9/9.65/-5.40/9/{离线部署与可观测性},
+    10/0.15/-6.00/10/{案例集精读}, 11/4.90/-6.00/11/{中国市场与合规}, 12/9.65/-6.00/12/{毕业项目},
+    13/0.15/-6.60/13/{复盘与作品集}}{
+    \node[font=\bfseries\scriptsize, text=fdacc, anchor=north west] at (\x,\y) {\w};
+    \node[font=\scriptsize, text=fdink, anchor=north west] at (\x+0.55,\y) {\tp};
+  }
+
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=north west] at (0.15,-7.40) {每周自检点长什么样};
+  \foreach \i/\x/\w/\txt in {%
+    1/0.15/4.60/{{\bfseries 第 3 周}　故意往代码里引入一个劣化改动，CI 门禁是否{\bfseries 真的会拦下来}},
+    2/4.90/4.60/{{\bfseries 第 5 周}　证书轮换过程中是否{\bfseries 真的做到零失败请求}，而不是「平时能用、轮换那一刻炸了」},
+    3/9.65/4.55/{{\bfseries 第 11 周}　CPU 降级路径是不是{\bfseries 真的自己跑通了}，而不是照抄官方文档就当完成}}{
+    \node[fdout, fill=fdmilk, anchor=north west, text width={(\w-0.4)*1cm}] at (\x,-7.85) {\txt};
+  }
+  \node[fdcav, anchor=north west, text width=13.9cm] at (0.15,-9.35)
+    {十三周的自检点都是同一种句式：{\bfseries 不是「读完了吗」，是「你自己动手验过没有」}。
+     产出物那一栏也一样 —— 每一周都要求交出一件能被别人检查的东西，而不是一段学习心得。};
+  \node[fdout, fill=fdamber, anchor=north west, text width=13.9cm] at (0.15,-10.25)
+    {{\bfseries 适用边界：}这条时间线假设你是全职投入。兼职或在岗学习要按比例拉长，
+     但{\bfseries 不要压缩第 3 周到第 9 周那七周}—— 核心工程能力是唯一没法靠读书补上的部分，
+     压缩它等于把整份计划变成一次纸面阅读。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% ═══  比喻图                                                 ═══
+%
+% 这一批和前面的流程图不是一回事。流程图画的是结构，比喻图画的是
+% 「这件事像什么」——目的是让一个抽象判据在读者脑子里留下一个画面。
+%
+% 一条自律：只画书里自己已经用过的比喻，不新编。
+%   「原型像西部片里的小镇布景」「如果他被公交车撞了怎么办」
+%   「没人会因为防止了从未发生的问题而受到表彰」——这些都是正文原话，
+%   图只是把它们画出来。新编一个比喻很容易，但那是给书加东西，不是给书配图。
+%
+% 画法：细线、留白、单一重点色。整幅只讲一件事，看一眼就够。
+% ═══════════════════════════════════════════════════════════════
+\tikzset{
+  pl/.style   = {draw=fdink, line width=0.9pt, line cap=round, line join=round},
+  plthin/.style = {draw=fdmute, line width=0.6pt},
+  placc/.style  = {draw=fdacc, line width=1.1pt, line cap=round},
+  plred/.style  = {draw=fdstop, line width=1.1pt, line cap=round},
+  plghost/.style= {draw=fdline, line width=0.7pt, dash pattern=on 2pt off 2pt},
+}
+
+% 比喻图外壳：画面在上，标题与正文在下。
+% #1 画面（tikzpicture 内容）  #2 标题  #3 正文
+\newcommand{\fdplate}[3]{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \fill[fdmilk, rounded corners=3pt] (0,0) rectangle (14.2,-6.30);
+  \begin{scope}[shift={(0,-0.35)}]
+    #1
+  \end{scope}
+  \draw[fdacc, line width=1.6pt] (0.55,-4.95) -- (2.05,-4.95);
+  \node[font=\bfseries\small, text=fdink, anchor=north west] at (0.55,-5.15) {#2};
+  \node[fdcav, anchor=north west, text width=13.1cm] at (0.55,-5.62) {#3};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 比喻 1 · 西部片里的小镇布景（上册第 6 章 · 原型 vs 曳光弹）
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdmetafacade}{\fdplate{%
+  % 门脸只有从侧面看才看得出是假的，所以画两格：正面看 / 侧面看。
+  % 画一格正面图怎么调都像一栋房子，这是试了两版才确定的。
+  \draw[plthin] (4.85,-0.55) -- (4.85,-4.60);
+  \draw[plthin] (9.35,-0.55) -- (9.35,-4.60);
+
+  % ── 正面看：像一栋楼 ────────────────────────────────
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south] at (2.55,-0.35) {正面看};
+  \draw[pl] (1.15,-4.05) -- (1.15,-1.30) -- (2.05,-1.30) -- (2.05,-0.90)
+            -- (3.05,-0.90) -- (3.05,-1.30) -- (3.95,-1.30) -- (3.95,-4.05) -- cycle;
+  \draw[plthin] (1.40,-1.75) -- (3.70,-1.75);
+  \draw[plthin] (2.25,-4.05) rectangle (2.85,-3.15);
+  \draw[plthin] (1.55,-2.25) rectangle (2.05,-2.80);
+  \draw[plthin] (3.05,-2.25) rectangle (3.55,-2.80);
+  \draw[plthin] (0.85,-4.05) -- (4.25,-4.05);
+  \node[font=\scriptsize, text=fdmute, anchor=north] at (2.55,-4.18) {气派、齐整、像那么回事};
+
+  % ── 侧面看：只有一块板 ──────────────────────────────
+  \node[font=\bfseries\scriptsize, text=fdstop, anchor=south] at (7.10,-0.35) {侧面看};
+  \fill[fdstop!25] (6.05,-4.05) rectangle (6.22,-0.90);
+  \draw[plred] (6.05,-4.05) rectangle (6.22,-0.90);
+  \draw[plred] (6.22,-1.70) -- (7.55,-4.05);
+  \draw[plred] (6.22,-2.75) -- (6.95,-4.05);
+  \draw[plthin] (5.35,-4.05) -- (8.85,-4.05);
+  \node[font=\scriptsize, text=fdstop, anchor=north] at (7.10,-4.18)
+    {一块板，两根斜杆。{\bfseries 背后什么都没有}};
+
+  % ── 曳光弹：一发真弹 ────────────────────────────────
+  \node[font=\bfseries\scriptsize, text=fdacc, anchor=south] at (11.75,-0.35) {曳光弹};
+  \draw[pl] (10.05,-2.55) circle (0.15);
+  \foreach \i in {0,...,6}{
+    \draw[placc, opacity={0.32+0.10*\i}]
+      ({10.38+\i*0.40},{-2.55+0.05*\i}) -- ({10.64+\i*0.40},{-2.46+0.05*\i});
+  }
+  \fill[fdacc] (13.30,-2.20) circle (0.11);
+  \node[font=\scriptsize, text=fdmute, anchor=north west, align=left, text width=3.4cm]
+    at (9.95,-3.05) {一发真弹 —— 打出去看得见弹道，而且它{\bfseries 会留在系统里长大}};
+}{原型是布景，曳光弹是真弹}{%
+  这是本书最容易被讲混的一对概念。核心区别不在于「小」，两者都小 ——
+  {\bfseries 区别在于它会不会留下来}。原型天生就不是为长期存在设计的代码，它生来就是要被扔掉的；
+  曳光弹这段代码会留下来长大。国内现场常把曳光弹说成「探路代码」「试水版本」，只对了一半：
+  {\bfseries「试水」通常暗示写完就扔，那说的其实是原型。}}}
+
+% ═══════════════════════════════════════════════════════════════
+% 比喻 2 · 那条踩出来的小路（上册第 10 章 · 影子 AI）
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdmetapath}{\fdplate{%
+  \fill[fdtint, opacity=0.55, rounded corners=5pt] (2.55,-4.00) rectangle (11.70,-1.15);
+  % 官方铺的那条路：沿着边绕过去
+  \draw[fdline!70, line width=11pt, line cap=round, line join=round]
+    (1.95,-4.15) -- (1.95,-0.80) -- (12.45,-0.80);
+  \node[font=\scriptsize, text=fdmute, anchor=south] at (7.20,-0.55)
+    {你铺的那一条 —— 埋了点、做了看板、开了培训};
+  % 两个端点
+  \fill[fdmute] (1.95,-4.15) circle (0.15);
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=west] at (2.30,-4.15) {入口};
+  \fill[fdacc] (12.45,-0.80) circle (0.15);
+  \node[font=\bfseries\scriptsize, text=fdacc, anchor=north east] at (12.90,-1.05) {目的地};
+  % 他们自己踩出来的那一条
+  \draw[plred, dash pattern=on 3.5pt off 2.5pt, -{Stealth[length=5pt]}]
+    (2.35,-4.05) -- (12.15,-1.00);
+  \foreach \i in {1,...,12}{
+    \pgfmathsetmacro{\tt}{\i/13}
+    \fill[fdstop, opacity=0.40]
+      ({2.35+\tt*9.8+0.09*sin(\i*83)},{-4.05+\tt*3.05+0.09*cos(\i*67)}) circle (0.07);
+  }
+  \node[font=\bfseries\scriptsize, text=fdstop, anchor=north west] at (5.05,-3.30)
+    {他们自己踩出来的那一条};
+}{官方入口没人走，旁边有一条踩出来的路}{%
+  同一份研究里的两个数字放在一起看：只有 {\bfseries 40\%} 的企业正式采购了大模型订阅服务，
+  但受访企业里{\bfseries 超过 90\%} 的员工说自己在定期使用个人 AI 工具处理工作任务。
+  {\bfseries 你在后台看到的「没人用」，可能只是「没人用你这个官方入口」}——
+  员工早就用自己的账号绕过去了。所以测量采用率时必须交叉验证官方埋点和员工的真实行为，
+  不能只看系统日志。}}
+
+% ═══════════════════════════════════════════════════════════════
+% 比喻 3 · 错位的那一颗扣子（下册第 4 章 · 定长报文的静默错位）
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdmetabutton}{\fdplate{%
+  \node[font=\bfseries\scriptsize, text=fdacc, anchor=south] at (3.30,-0.35) {扣对了};
+  \draw[pl] (2.55,-0.85) -- (2.55,-4.60);
+  \draw[pl] (4.05,-0.85) -- (4.05,-4.60);
+  \foreach \i in {0,...,3}{
+    \draw[plthin] (3.60,{-1.35-\i*0.80}) -- (4.00,{-1.35-\i*0.80});
+    \fill[fdacc!50] (3.30,{-1.35-\i*0.80}) circle (0.16);
+    \draw[plthin] (3.30,{-1.35-\i*0.80}) circle (0.16);
+    \draw[placc, opacity=0.55] (3.46,{-1.35-\i*0.80}) -- (3.60,{-1.35-\i*0.80});
+  }
+  \node[font=\bfseries\scriptsize, text=fdstop, anchor=south] at (9.55,-0.35) {第一颗错了一格};
+  \draw[pl] (8.80,-0.85) -- (8.80,-4.60);
+  \draw[pl] (10.30,-0.85) -- (10.30,-4.60);
+  \foreach \i in {0,...,3}{
+    \draw[plthin] (9.85,{-1.35-\i*0.80}) -- (10.25,{-1.35-\i*0.80});
+    \fill[fdstop!40] (9.55,{-2.15-\i*0.80}) circle (0.16);
+    \draw[plthin] (9.55,{-2.15-\i*0.80}) circle (0.16);
+    \draw[plred, opacity=0.6] (9.71,{-2.15-\i*0.80}) -- (9.85,{-1.35-\i*0.80});
+  }
+  \node[font=\scriptsize, text=fdstop, anchor=north west, align=left, text width=3.15cm]
+    at (10.75,-2.15) {衣服还是穿上了，扣子一颗没少 —— {\bfseries 但从第一颗起，每一颗都错在下一格}};
+  \draw[plthin, {Stealth[length=4pt]}-] (5.05,-2.70) -- (7.75,-2.70);
+  \node[font=\scriptsize, text=fdmute, anchor=south] at (6.40,-2.62) {只差一格};
+}{一个字节错位，后面全错，而且不报错}{%
+  定长报文没有 JSON · XML 那样的自解释分隔符，每个字段按固定的字节偏移和长度排布。
+  {\bfseries 最危险的失败模式是它不会报错}——某个字段的长度定义理解错了，
+  解析代码只会把后续所有字段错位地读出一堆「看起来合理但完全错误」的值，
+  而不会抛异常。这比一次明显的连接失败危险得多，因为它可能在生产环境里默默跑很久才被发现。
+  防御手段只有一条不能省：{\bfseries 给每条报文强制做结构校验}，
+  记录长度、字段数量对不上就立刻拒绝并告警。}}
+
+% ═══════════════════════════════════════════════════════════════
+% 文件结束
+% ═══════════════════════════════════════════════════════════════
+
+% 火柴人：#1 x  #2 脚底 y
+\newcommand{\plperson}[2]{%
+  \draw[pl] (#1,#2+0.62) circle (0.125);
+  \draw[pl] (#1,#2+0.495) -- (#1,#2+0.20);
+  \draw[pl] (#1,#2+0.20) -- (#1-0.15,#2);
+  \draw[pl] (#1,#2+0.20) -- (#1+0.15,#2);
+  \draw[pl] (#1-0.18,#2+0.40) -- (#1+0.18,#2+0.40);
+}
+% 火苗：#1 x  #2 底 y  #3 高
+\newcommand{\plflame}[3]{%
+  \fill[fdstop!35] (#1,#2) .. controls (#1-0.14*#3,#2+0.45*#3) and (#1-0.06*#3,#2+0.68*#3) ..
+    (#1,#2+#3) .. controls (#1+0.10*#3,#2+0.62*#3) and (#1+0.16*#3,#2+0.42*#3) .. (#1,#2) -- cycle;
+  \draw[plred] (#1,#2) .. controls (#1-0.14*#3,#2+0.45*#3) and (#1-0.06*#3,#2+0.68*#3) ..
+    (#1,#2+#3) .. controls (#1+0.10*#3,#2+0.62*#3) and (#1+0.16*#3,#2+0.42*#3) .. (#1,#2) -- cycle;
+}
+
+% ═══════════════════════════════════════════════════════════════
+% 比喻 4 · 救火的人和装防火门的人（上册第 3 章 · 英雄主义陷阱）
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdmetahero}{\fdplate{%
+  \draw[plthin] (7.10,-0.55) -- (7.10,-4.60);
+  % ── 左：着火了，有人在救 ──────────────────────────────
+  \node[font=\bfseries\scriptsize, text=fdstop, anchor=south] at (3.55,-0.35) {这个人会被提拔};
+  \fill[fdstop!10] (2.30,-1.05) -- (5.05,-1.05) -- (5.05,-0.72) -- (2.30,-0.72) -- cycle;
+  \draw[pl] (2.30,-4.05) rectangle (4.55,-1.05);
+  \draw[plthin] (2.60,-1.55) rectangle (3.10,-2.10);
+  \draw[plthin] (3.75,-1.55) rectangle (4.25,-2.10);
+  \draw[plthin] (3.15,-4.05) rectangle (3.70,-3.15);
+  \plflame{2.85}{-1.50}{0.60}
+  \plflame{4.00}{-1.50}{0.72}
+  \plflame{3.40}{-2.95}{0.52}
+  \draw[pl] (5.15,-4.05) -- (5.55,-1.60);          % 梯子
+  \draw[pl] (5.45,-4.05) -- (5.85,-1.60);
+  \foreach \i in {0,...,4}{\draw[plthin] ({5.20+\i*0.065},{-3.85+\i*0.50}) -- ({5.50+\i*0.065},{-3.85+\i*0.50});}
+  \plperson{6.20}{-2.55}
+  \draw[placc] (6.05,-2.15) -- (5.10,-2.35);       % 水管
+  \node[font=\normalsize, text=fdstop] at (6.20,-1.35) {★};
+  \node[font=\scriptsize, text=fdstop, anchor=north] at (3.90,-4.22) {晋升评审上写着「扛过了那次故障」};
+  % ── 右：没着火，因为三周前有人把流程改了 ────────────────
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south] at (10.75,-0.35) {这个人不会被提起};
+  \draw[pl] (9.55,-4.05) rectangle (11.80,-1.05);
+  \draw[plthin] (9.85,-1.55) rectangle (10.35,-2.10);
+  \draw[plthin] (11.00,-1.55) rectangle (11.50,-2.10);
+  \draw[plthin] (10.40,-4.05) rectangle (10.95,-3.15);
+  \draw[placc, fill=fdacc!25] (11.05,-2.50) rectangle (11.50,-2.90);
+  \draw[placc] (11.50,-2.70) -- (12.15,-2.70);
+  \node[font=\scriptsize, text=fdacc, anchor=west, align=left, text width=1.55cm]
+    at (12.20,-2.70) {三周前改掉的那个流程};
+  \plperson{10.20}{-3.45}
+  \node[font=\scriptsize, text=fdmute, anchor=north] at (10.75,-4.22) {复盘会上这件事根本不会出现};
+}{没人会因为「防止了从未发生的问题」而受到表彰}{%
+  这是英雄主义陷阱的完整机制，也是本书四个陷阱里{\bfseries 唯一有两篇同行评审论文支撑}的一个：
+  组织越依赖救火和加班硬扛，就越会奖励和提拔那些「英雄式」拯救项目的人，
+  进而挤出真正的能力建设投入，形成自我强化的恶性循环。
+  它还和「关键人风险」互为因果 —— {\bfseries 救得越多，越是唯一懂的人，越离不开他}。
+  纠偏的第一步不是劝人别救火，是{\bfseries 把「防止问题发生」也放进可见的绩效叙事里}：
+  在复盘里主动说「这次没救火，是三周前把某个流程改掉了」。}}
+
+% ═══════════════════════════════════════════════════════════════
+% 比喻 5 · 试镜与正式演出（上册第 3 章 · 演示幸存者偏差）
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdmetastage}{\fdplate{%
+  \draw[plthin] (7.10,-0.55) -- (7.10,-4.60);
+  % ── 左：试镜 ────────────────────────────────────────
+  \node[font=\bfseries\scriptsize, text=fdacc, anchor=south] at (3.55,-0.35) {试镜 · 会议室里的 demo};
+  \draw[pl] (1.55,-3.75) rectangle (5.55,-1.05);
+  \fill[fdacc!12] (3.05,-3.75) -- (2.35,-1.60) -- (3.75,-1.60) -- cycle;   % 一盏灯
+  \draw[placc] (3.05,-1.60) circle (0.13);
+  \plperson{3.05}{-3.20}
+  \draw[pl] (4.55,-3.40) rectangle (5.25,-3.15);
+  \plperson{4.90}{-3.15}
+  \node[font=\scriptsize, text=fdmute, anchor=north, align=center, text width=5.2cm]
+    at (3.55,-3.90) {被挑过的数据 · 熟悉产品的「用户」· 单一工作流};
+  % ── 右：正式演出 ────────────────────────────────────
+  \node[font=\bfseries\scriptsize, text=fdstop, anchor=south] at (10.75,-0.35) {正式演出 · 生产环境};
+  \draw[pl] (8.15,-3.75) rectangle (13.35,-1.05);
+  \draw[pl] (8.55,-1.90) rectangle (12.95,-1.35);                          % 舞台
+  \foreach \i in {0,...,5}{\draw[placc] ({8.85+\i*0.75},-1.35) circle (0.09);}
+  \plperson{10.75}{-1.88}
+  \foreach \r in {0,...,2}{
+    \foreach \c in {0,...,9}{
+      \fill[fdmute!45] ({8.60+\c*0.50},{-2.55-\r*0.42}) circle (0.085);}}
+  \node[font=\scriptsize, text=fdstop, anchor=north, align=center, text width=5.4cm]
+    at (10.75,-3.90) {真实的脏数据 · 会打错字的真用户 · 所有边界情况 · 没有第二次机会};
+}{demo 是试镜，生产是正式演出}{%
+  一个 AI 应用在会议室里演示得行云流水，客户当场拍板，投产三个月后却卡在生产环境里迟迟上不了线 ——
+  {\bfseries 差别不在模型，在两场演出的条件根本不同}。
+  验证用的数据是被人工挑选、清洗过的样本，还没对接过真实的脏数据源；
+  参与验证的「用户」是熟悉产品的内部人员，不是会打错字、提刁钻问题的真实客户；
+  验证范围被限定在单一工作流。
+  纠偏动作只有两条：{\bfseries 立项阶段就用生产数据（哪怕脱敏子集）做验证}，
+  以及把「这个结果在生产环境的边界情况下还成立吗」做成 demo 之后的强制追问，不能靠「感觉应该没问题」带过。}}
+
+% ═══════════════════════════════════════════════════════════════
+% 比喻 6 · 那句玩笑（上册第 3 章 · bus factor）
+% 「如果他被公交车撞了怎么办」是正文原话。这句玩笑本身就是信号，
+% 所以图不画公交车，画的是那个人被拿走之后剩下的东西。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdmetabus}{\fdplate{%
+  \draw[plthin] (7.10,-0.55) -- (7.10,-4.60);
+  % ── 左：星形。所有人都连到中间那一个 ──────────────────
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south] at (3.55,-0.35) {现在};
+  \foreach \i in {0,...,6}{
+    \pgfmathsetmacro{\aa}{\i*51.4+12}
+    \draw[plthin] (3.55,-2.45) -- ({3.55+1.45*cos(\aa)},{-2.45+1.10*sin(\aa)});
+    \fill[white] ({3.55+1.45*cos(\aa)},{-2.45+1.10*sin(\aa)}) circle (0.19);
+    \draw[pl] ({3.55+1.45*cos(\aa)},{-2.45+1.10*sin(\aa)}) circle (0.19);
+  }
+  \fill[fdacc!35] (3.55,-2.45) circle (0.30);
+  \draw[placc] (3.55,-2.45) circle (0.30);
+  \node[font=\bfseries\scriptsize, text=fdacc, anchor=north] at (3.55,-3.85) {只有他真正理解那几个脆弱环节};
+  % ── 右：把他拿走 ────────────────────────────────────
+  \node[font=\bfseries\scriptsize, text=fdstop, anchor=south] at (10.75,-0.35) {他休假的那一周};
+  \foreach \i in {0,...,6}{
+    \pgfmathsetmacro{\aa}{\i*51.4+12}
+    \fill[white] ({10.75+1.45*cos(\aa)},{-2.45+1.10*sin(\aa)}) circle (0.19);
+    \draw[pl] ({10.75+1.45*cos(\aa)},{-2.45+1.10*sin(\aa)}) circle (0.19);
+  }
+  \draw[plred] (10.45,-2.15) -- (11.05,-2.75);
+  \draw[plred] (11.05,-2.15) -- (10.45,-2.75);
+  \node[font=\bfseries\scriptsize, text=fdstop, anchor=north] at (10.75,-3.85) {七个人，一条线都连不上};
+}{「如果他被公交车撞了怎么办」}{%
+  这句玩笑本身就是 bus factor 过低的口头信号。它和英雄主义陷阱互为因果：
+  {\bfseries 一个人频繁救场，意味着只有他真正理解系统的脆弱环节，别人插不上手，也没有动力插手}——
+  救得越多，越是唯一懂的人，越离不开他。
+  一份对 1,932 个开源项目的研究发现，{\bfseries 16\% 的项目遭遇过全部关键工程师离职，其中只有 41\% 能被其他工程师接续下去}；
+  同一研究的访谈里，某次关键工程师离职后「花了长达 6 人月才让项目重回正轨」，部分子系统甚至不得不推倒重写。
+  另外两个信号也很直白：出事故时同事第一反应是私信某个具体的人，而不是发到职能邮箱；
+  晋升理由反复出现「压力下交付」，很少出现「这个季度没发生本可能发生的事故」。}}
+
+% ═══════════════════════════════════════════════════════════════
+% 比喻 7 · 搬家之后留下的那一样（上册第 2 章 · 资产层）
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdmetamove}{\fdplate{%
+  \draw[plthin] (1.05,-3.85) -- (13.15,-3.85);
+  % 正在被搬走的那几箱
+  \foreach \i/\x/\lb in {1/1.55/{模型}, 2/3.35/{供应商}, 3/5.15/{芯片}, 4/6.95/{提示词}, 5/8.75/{界面}}{
+    \pgfmathsetmacro{\lift}{0.30+0.16*\i}
+    \draw[plthin, fill=white] (\x,{-3.85+\lift}) rectangle (\x+1.30,{-2.75+\lift});
+    \draw[plthin] (\x,{-3.30+\lift}) -- (\x+1.30,{-3.30+\lift});
+    \node[font=\scriptsize, text=fdmute] at (\x+0.65,{-3.08+\lift}) {\lb};
+    \draw[fdmute, line width=0.8pt, -{Stealth[length=4pt]}]
+      (\x+0.65,{-2.65+\lift}) -- (\x+0.65,{-2.15+\lift});
+  }
+  \node[font=\scriptsize, text=fdmute, anchor=west] at (1.15,-1.35)
+    {这些都会换 —— 有的是客户换的，有的是政策逼着换的};
+  % 螺栓固定在地上的那一样
+  \fill[fdtint] (10.55,-3.85) rectangle (12.85,-2.45);
+  \draw[placc, line width=1.2pt] (10.55,-3.85) rectangle (12.85,-2.45);
+  \node[font=\bfseries\footnotesize, text=fdink] at (11.70,-2.95) {验收集};
+  \node[font=\scriptsize, text=fdmute] at (11.70,-3.42) {黄金集 · 对抗集 · 回归集};
+  \foreach \x in {10.85,11.70,12.55}{
+    \draw[placc] (\x,-3.85) -- (\x,-4.08);
+    \fill[fdacc] (\x,-4.08) circle (0.08);
+  }
+  \node[font=\bfseries\scriptsize, text=fdacc, anchor=north] at (11.70,-4.22) {拧在地上，而且单调增长};
+}{屋里的东西都会被搬走，只有一样是拧在地上的}{%
+  骨架第四层问的就是这一句：{\bfseries 模型换了、供应商换了、芯片按信创要求换了，你在这个客户这里建的东西，哪一样不用重建？}
+  大多数答案经不起问 —— 向量索引换一次 embedding 模型就得全量重算，提示词跟着模型版本走，
+  界面跟着业务流程改，连数据管道都可能因为源系统升级而重写。
+  剩下的那一样是{\bfseries 验收集}：它把「什么算对、什么必须拒答、边界在哪」从几个人的脑子里搬出来，编码成可以计算的东西。
+  反过来说更准确 ——{\bfseries 正是因为有它，才敢换}。
+  它还有一个别的产出物没有的性质：{\bfseries 单调增长}，每修一次故障多一条，永不删除。}}
+
+% ── 上册第 4 章 · 两套框架各自看到什么 ─────────────────────────
+%
+% 这两张是从课件的示例产物图回馈过来的。**课件那两张是位图，不能直接贴进书**——
+% 版心 16cm、图宽 2400px，一个像素只有 0.19pt，课件上 20px 的标签落到纸上是 3.8pt，
+% 正文是 11pt，那种字读不了。所以在这里重画成 TikZ，字号由 \scriptsize 决定，
+% 与正文同一套字体，缩放也不掉字。
+%
+% 为什么值得画：§4.4 已经有两张表了，表缺的不是内容是**形状**——
+% 可见性线到底把什么分开了、失败点落在线的哪一侧，摆成表格看不出来。
+
+% 服务蓝图。四条泳道 ＋ 三条分隔线，两个失败点钉在出问题的那个框上。
+% 失败点的文字走下面的图例，不放在泳道之间——放那儿会正好压住「可见性线」
+% 那行标签，而可见性线恰恰是这张图最要紧的一条。
+\newcommand{\fdblueprint}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \def\lanew{2.72}
+  \foreach \i/\ph in {0/① 提交, 1/② 初审, 2/③ 审批, 3/④ 打款}{
+    \node[font=\scriptsize, text=fdmute, anchor=south west]
+      at (2.9+\i*\lanew,0.10) {\ph};
+  }
+  % 泳道：\ly 是这条泳道的底边
+  \foreach \ly/\lname/\lsub in {-1.30/客户行为/员工做的事,
+                                -2.75/前台动作/客户看得见,
+                                -4.20/后台动作/客户看不见,
+                                -5.65/支持流程/支撑上面三层}{
+    \draw[fdthin, fill=white] (0,\ly) rectangle (13.98,\ly+1.20);
+    \node[font=\bfseries\scriptsize, text=fdink, anchor=west]
+      at (0.16,\ly+0.78) {\lname};
+    \node[font=\scriptsize, text=fdmute, anchor=west]
+      at (0.16,\ly+0.38) {\lsub};
+  }
+  % 格子：\cc 列号，\ry 泳道底边，\bx 文字
+  \foreach \cc/\ry/\bx in {0/-1.30/提交报销单, 1/-1.30/等待通知, 3/-1.30/收到到账,
+                           0/-2.75/系统收单页面, 3/-2.75/短信通知结果,
+                           1/-4.20/财务初审单据, 2/-4.20/部门负责人审批,
+                           3/-4.20/出纳打款,
+                           1/-5.65/发票查验接口, 2/-5.65/审批权限对照表,
+                           3/-5.65/银企直联}{
+    \node[fdcard, fill=fdmilk, draw=fdacc, minimum width=2.40cm,
+          minimum height=0.72cm, font=\scriptsize]
+      at (2.9+\cc*\lanew+1.20,\ry+0.60) {\bx};
+  }
+  % 三条分隔线。标签靠右，避开左边的泳道名。
+  \foreach \sy/\snm in {-1.42/交互线, -2.87/可见性线, -4.32/内部交互线}{
+    \draw[draw=fdwarn, line width=0.6pt, dash pattern=on 2.2pt off 2.2pt]
+      (0,\sy) -- (13.98,\sy);
+    \node[font=\scriptsize, text=fdwarn, anchor=south east, inner sep=1.4pt,
+          fill=white] at (13.94,\sy+0.02) {\snm};
+  }
+  % 失败点徽标，钉在出问题的那两个框的右上角
+  \foreach \fc/\fn in {1/1, 2/2}{
+    \fill[fdstop] (2.9+\fc*\lanew+2.26,-3.46) circle (0.21);
+    \node[font=\bfseries\tiny, text=white] at (2.9+\fc*\lanew+2.26,-3.46) {\fn};
+  }
+  \node[font=\bfseries\scriptsize, text=fdstop, anchor=west] at (0,-6.10)
+    {失败点};
+  \node[font=\scriptsize, text=fdink, anchor=west] at (1.10,-6.10)
+    {① 单据缺发票号（初审环节）\qquad ② 审批人休假无代理人（审批环节）};
+  \node[font=\scriptsize, text=fdmute, anchor=west, align=left] at (0,-6.70)
+    {两个失败点都落在可见性线以下。员工侧只看得到「等待通知」，看不到卡在哪——\\
+     他嘴里那句「审批效率低」就是这么来的：他能观测到的只有总时长。};
+\end{tikzpicture}}
+
+% 本体三要素。对象在上、状态链在下，动作挂在状态之间的箭头上。
+% 把动作画成箭头是这张图相对正文那份清单的唯一增量：清单把对象、关系、动作
+% 列成三条并列的项，看不出「动作就是状态之间的那些边，前置条件挂在边上」。
+\newcommand{\fdontotriad}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[font=\bfseries\scriptsize, text=fdacc, anchor=west] at (0,0.30)
+    {对象（及其属性）};
+  \foreach \ox/\onm/\oat in {0/报销单/金额\\发票号\\状态\\提交时间,
+                             4.66/员工/工号\\所属部门,
+                             9.32/审批人/权限上限\\在岗状态}{
+    \node[fdcard, draw=fdacc, line width=0.9pt, minimum width=4.30cm,
+          minimum height=1.90cm, anchor=north west, align=left,
+          font=\scriptsize] (o\ox) at (\ox,-0.10)
+      {{\bfseries\small \onm}\\[2pt]\oat};
+  }
+  \node[font=\bfseries\scriptsize, text=fdacc, anchor=west] at (0,-2.36)
+    {关系};
+  \node[font=\scriptsize, text=fdink, anchor=west] at (1.10,-2.36)
+    {报销单 ──归属于──▶ 员工\qquad 报销单 ──待批于──▶ 审批人};
+  \node[font=\scriptsize, text=fdmute, anchor=west] at (0,-2.86)
+    {「在岗状态」这个属性是访谈里挖出来的，不是拍脑袋加的（§4.2）};
+
+  \node[font=\bfseries\scriptsize, text=fdacc, anchor=west] at (0,-3.44)
+    {状态与动作};
+  \foreach \si/\snm in {0/草稿, 1/待初审, 2/待审批, 3/待打款, 4/已完成}{
+    \node[fdcard, fill=fdmilk, draw=fdink, minimum width=1.86cm,
+          minimum height=0.68cm, font=\scriptsize]
+      (s\si) at (0.95+\si*2.86,-4.30) {\snm};
+  }
+  \foreach \ai/\anm/\acd in {0/提交/发票号非空, 1/初审/金额与发票匹配,
+                             2/审批/金额 $\leq$ 权限上限, 3/打款/状态＝待打款}{
+    \draw[fdedgea] (0.95+\ai*2.86+0.95,-4.30) -- (0.95+\ai*2.86+1.91,-4.30);
+    \node[font=\bfseries\scriptsize, text=fdacc, anchor=south]
+      at (0.95+\ai*2.86+1.43,-3.88) {\anm};
+    \node[font=\tiny, text=fdmute, anchor=north]
+      at (0.95+\ai*2.86+1.43,-4.76) {\acd};
+  }
+  \node[font=\scriptsize, text=fdmute, anchor=north west, align=left]
+    at (0,-5.14)
+    {动作就是状态之间的那些边，前置条件挂在边上——这是清单排不出来的关系。\\
+     第三条边那个条件是本体逼出来的：「金额 $\leq$ 本人权限上限」要成立，\\
+     系统必须知道当前有效审批人是谁，写出来才发现这份数据不存在。\\
+     服务蓝图看不到这一条，它只看到「审批」那一个框。};
+\end{tikzpicture}}
+
+% ── 下册第 14 章 · 四条边界把可行域挤成什么样 ────────────────
+%
+% §14.2 原话是「四个约束互相挤压，任何单点优化都会撞上另一条边界」——
+% 这是一句图的话，但正文只用文字说了。已有的 \fdcaseqc 画的是三条被否决的路，
+% 画的是「怎么走到那儿的」；这张画的是「为什么只能是那儿」。
+%
+% **图上不出现任何正文没给过的数字。** 节拍 4.5 秒、推理几百毫秒量级是原文有的，
+% 其余四段的占比正文没给，就不画占比——工业现场的节拍分解各线不同，
+% 编一组好看的数字出来，这一章后面所有真实数字都会跟着掉价。
+\newcommand{\fdcaseqcbox}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \fill[fdmilk, rounded corners=4pt] (3.55,-3.60) rectangle (10.45,-1.05);
+  \node[font=\bfseries\footnotesize, text=fdacc, align=center]
+    at (7.0,-1.60) {收敛出来的只剩这一条};
+  \node[font=\scriptsize, text=fdink, align=center] at (7.0,-2.42)
+    {轻量化边缘模型\\[1pt]＋ 分层阈值策略\\[1pt]＋ 热力图可视化};
+  \node[font=\scriptsize, text=fdmute] at (7.0,-3.28) {§14.3、§14.4};
+
+  % 四条边界，各自从一个方向压进来
+  \node[fdask, anchor=north, minimum width=5.9cm, align=left] (top) at (7.0,0.95)
+    {{\bfseries 产线节拍 4.5 秒}\\
+     拍照、传输、推理、回传、分拣信号全走完；\\
+     留给推理的只有几百毫秒量级\\
+     {\color{fdstop}↓ 压住的是模型规模，不是「换个更准的」}};
+  \node[fdask, anchor=east, minimum width=4.45cm, align=left] (lft) at (3.35,-2.32)
+    {{\bfseries 工况漂移}\\
+     光源衰减、油雾反光、\\
+     来料表面处理换批\\
+     {\color{fdstop}→ 压住「训一次}\\
+     {\color{fdstop}就完事」这个假设}};
+  \node[fdask, anchor=west, minimum width=4.45cm, align=left] (rgt) at (10.65,-2.32)
+    {{\bfseries 误判代价不对称}\\
+     漏检是召回与品牌，\\
+     误检只是多一次人工复核\\
+     {\color{fdstop}← 阈值推向一边，}\\
+     {\color{fdstop}误检率必然偏高}};
+  \node[fdask, anchor=south, minimum width=5.9cm, align=left] (btm) at (7.0,-5.55)
+    {{\bfseries 质检员的信任}\\
+     只给一个红灯不给理由，第一反应是绕过\\
+     {\color{fdstop}↑ 压住的是「模型够准就行」这个想法}};
+
+  \node[font=\scriptsize, text=fdmute, anchor=north west, align=left]
+    at (0,-6.35)
+    {四条边界不是并列的四个待办，是四个方向同时往里压。\\
+     {\bfseries 往任何一条边上单点优化，都会撞上另一条}——把模型换大一档撞节拍，\\
+     把阈值调高压误检就抬漏检，只顾准确率不给依据就没人用。\\
+     图上不画各段耗时占比：正文给过的数字只有 4.5 秒与推理段的几百毫秒量级，\\
+     其余各线不同，编出来会连累这一章其他真实数字的可信度。};
+\end{tikzpicture}}
+
+% ── 下册第 15 章 · 两种选型顺序，方向相反 ─────────────────────
+%
+% §15.4 第 3 条的原话：「选型顺序和第 14 章相反——不是先选一个精度达标的模型
+% 再想办法塞进硬件，而是反过来」。这是这一章最可迁移的一条，
+% 而顺序这种东西画成两条链最省事，写成一段话读者要在脑子里自己排。
+\newcommand{\fdcasemineorder}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \foreach \ri/\rlab/\rcol in {0/常规顺序/fdstop, 1/本章顺序/fdacc}{
+    \node[font=\bfseries\footnotesize, text=\rcol, anchor=east]
+      at (2.30,-\ri*2.55) {\rlab};
+  }
+  % 常规顺序：最后撞墙
+  \foreach \i/\bx in {0/定一个精度目标, 1/选一个达标的模型,
+                      2/想办法塞进硬件, 3/撞上功耗与认证}{
+    \node[fdcard, draw=fdstop, minimum width=2.55cm, minimum height=0.86cm,
+          font=\scriptsize] (a\i) at (3.90+\i*2.90,0) {\bx};
+  }
+  \foreach \i in {0,1,2}{
+    \draw[draw=fdstop, line width=0.9pt, -{Stealth[length=3.4pt]}]
+      (3.90+\i*2.90+1.30,0) -- (3.90+\i*2.90+1.58,0);
+  }
+  \draw[draw=fdstop, line width=0.9pt, -{Stealth[length=3.4pt]}]
+    (12.60,-0.46) .. controls (13.60,-1.05) and (5.20,-1.05) .. (3.90,-0.46);
+  \node[font=\scriptsize, text=fdstop] at (8.25,-1.00) {返工};
+
+  % 本章顺序：约束在前，精度是结果
+  \foreach \i/\bx in {0/本安认证给定功耗, 1/框定参数量与帧率,
+                      2/按任务拆优先级, 3/精度是结果}{
+    \node[fdcard, draw=fdacc, fill=fdmilk, minimum width=2.55cm,
+          minimum height=0.86cm, font=\scriptsize]
+      (b\i) at (3.90+\i*2.90,-2.55) {\bx};
+  }
+  \foreach \i in {0,1,2}{
+    \draw[fdedgea] (3.90+\i*2.90+1.30,-2.55) -- (3.90+\i*2.90+1.58,-2.55);
+  }
+  \node[font=\scriptsize, text=fdmute, anchor=north, align=center]
+    at (9.70,-3.10) {「未戴安全帽」保帧率\\「异物侵入」可降频};
+
+  \node[font=\scriptsize, text=fdmute, anchor=north west, align=left]
+    at (0,-4.30)
+    {差别不在哪条链更聪明，在{\bfseries 哪一头的东西改不动}。\\
+     本安认证是下册 §12.1 那张约束分级表里的第二级——谁都改不了，\\
+     所以它必须排在最前面，而不是等模型选完了再来适配。\\
+     反过来说：如果一个项目里最硬的约束排在链条末尾，这条链迟早要重走一遍。};
+\end{tikzpicture}}
+
+% ── 下册第 10 章 · 技能缩短了哪一段，哪一段一寸没动 ──────────
+%
+% §10.0 那张「从前／现在」四行表里，最要紧的是最后一行：**维护成本没变**。
+% 表格把四行排成并列，读者容易平均用力地读过去，恰好漏掉那一行；
+% 而全章后面所有治理内容（下架判据、负责人、技能债）都是从那一行推出来的。
+% 画成两条轨道之后，「右边那道门两边一样宽」是看出来的，不是读出来的。
+\newcommand{\fdskillgap}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \foreach \ry/\rlab/\rcol in {0/从前/fdmute, -2.60/有了技能/fdacc}{
+    \node[font=\bfseries\scriptsize, text=\rcol, anchor=south west]
+      at (0,\ry+0.62) {\rlab};
+  }
+  % 两行共有的头尾：第二级、门、第三级，x 完全对齐
+  \foreach \ry in {0,-2.60}{
+    \node[fdcard, fill=fdpale, minimum width=2.20cm, minimum height=1.10cm,
+          font=\scriptsize, align=center] at (1.10,\ry) {第二级\\写下来的做法};
+    \node[fdcard, draw=fdstop, minimum width=2.40cm, minimum height=1.10cm,
+          font=\scriptsize, align=center] at (11.35,\ry)
+      {有人愿意维护\\而且排了工时};
+    \node[fdcard, fill=fdtint, draw=fdacc, minimum width=2.20cm,
+          minimum height=1.10cm, font=\scriptsize, align=center]
+      at (13.90,\ry) {第三级\\下一个人能直接用};
+  }
+  % 从前：两道宽坎
+  \node[fdcard, draw=fdmute, minimum width=3.60cm, minimum height=1.10cm,
+        font=\scriptsize, align=center] at (4.25,0) {把做法翻译成代码\\（要另一个人）};
+  \node[fdcard, draw=fdmute, minimum width=3.60cm, minimum height=1.10cm,
+        font=\scriptsize, align=center] at (8.10,0) {让下一个人知道它在\\（靠记忆和口口相传）};
+  % 有了技能：两道坎缩窄，中间那段直接没有了
+  \node[fdcard, draw=fdacc, minimum width=1.50cm, minimum height=1.10cm,
+        font=\scriptsize, align=center] at (3.20,-2.60) {按格式\\落盘};
+  \node[fdcard, draw=fdacc, minimum width=1.50cm, minimum height=1.10cm,
+        font=\scriptsize, align=center] at (4.95,-2.60) {描述匹配\\就被取出};
+  \draw[draw=fdline, line width=0.6pt, dash pattern=on 2pt off 2pt]
+    (5.95,-3.15) rectangle (9.90,-2.05);
+  \node[font=\scriptsize, text=fdacc] at (7.92,-2.60) {这一段没有了};
+
+  \foreach \ry in {0,-2.60}{
+    \draw[fdedge] (10.15,\ry) -- (10.15,\ry);
+  }
+  % 圈住那道没变的门
+  \draw[draw=fdstop, line width=0.9pt, dash pattern=on 2.6pt off 2.2pt,
+        rounded corners=3pt] (10.02,-3.42) rectangle (12.68,0.72);
+  \node[font=\bfseries\scriptsize, text=fdstop, anchor=south] at (11.35,0.80)
+    {两边一样宽};
+
+  \node[font=\scriptsize, text=fdmute, anchor=north west, align=left]
+    at (0,-3.86)
+    {技能缩短的是左边那两段：不用先翻译成代码，也不用有人记得它存在。\\
+     {\bfseries 右边那道门一寸没动}——它是上册 §14.2 第三级的入场条件。\\
+     制作成本降了，维护成本没降，于是门口的队排得更长。\\
+     本章 §10.6 的下架判据、§10.8 的技能债，全是从这一句推出来的。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 · 上册第 2 章·骨架的推导链
+% 这一节的全部意思是「不靠资历，靠一条能被打断的链」。链画成竖梯，
+% 每一节一个可攻击点；末节有一条虚线回到第 5 节——举得出反例就回去改骨架。
+% 不画成环，是因为它不是循环流程：只有第 7 节命中了才回头。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdderive}{%
+\begin{tikzpicture}[x=1cm,y=1cm,
+  stp/.style={rounded corners=3pt, draw=fdline, line width=0.7pt, fill=white,
+              inner sep=5pt, align=left, text width=8.4cm,
+              font=\footnotesize, text=fdink, anchor=north west}]
+
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south west] at (0.05,0.18)
+    {这副骨架不靠作者身份成立，靠这条链成立 —— 每一节都可以被单独攻击};
+
+  \foreach \i/\y/\ttl/\sub in {%
+    1/0/{现实问题}/{AI 交付的失败率高，而且失败的位置有规律},
+    2/-1.30/{成熟理论}/{这些失败形态，管理学与信息系统研究里早有对应的理论},
+    3/-2.60/{AI 让理论的适用前提变强}/{老问题从「可以绕过」被推到了「绕不过」},
+    4/-3.90/{多个独立来源收敛}/{几家公司各自写的岗位职责，落到同一组动作上},
+    5/-5.20/{组合成一副新框架}/{四层骨架与六道关卡 —— 组成部分有出处，组合是本书的主张},
+    6/-6.50/{已知的失败能被归因}/{每一种死法都定位得到是哪一关没守住（§2.5）},
+    7/-7.80/{它可以被反例推翻}/{举出落不进六关的失败，或指出某条判据退不回公理}%
+  }{
+    \node[fdnum] (n\i) at (0.30,\y-0.45) {\i};
+    \node[stp] (b\i) at (0.78,\y) {{\bfseries \ttl}\\{\scriptsize\color{fdmute}\sub}};
+  }
+  \foreach \y in {-1.02,-2.32,-3.62,-4.92,-6.22,-7.52}{
+    \draw[fdedgea] (1.55,\y) -- (1.55,\y-0.26);
+  }
+
+  \draw[fddep] (b7.east) -- (10.10,-8.20) -- (10.10,-5.62) -- (b5.east);
+  \node[fdcav, anchor=north west, text width=2.55cm] at (10.30,-6.15)
+    {举得出反例，\\就回去改骨架 —— 这是它和口号的全部区别};
+
+  \node[fdout, fill=fdmilk, anchor=north west, text width=12.5cm] at (0.05,-9.10)
+    {{\bfseries 链上任意一节被打断，这副骨架就得改。} 靠资历成立的方法论没有这个性质 ——
+     你没法从「他经验丰富」推出「这条判据在什么条件下会失效」。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 · 上册第 2 章·这套方法论的完整来路（时代命题 → FDE → 方法论）
+% 两大部分：上半是时代命题的三步（技术事实→管理前提被推翻→编译命题），
+% 下半是 FDE 的三步（岗位→方法论→检验）。主链在左，右栏放别人各自
+% 独立走出的路（厂商文献、JD 收敛），每条带本章参考来源编号。
+% 设计约束：右栏全部是「旁证」，用虚线接到主链——虚线在本书图例里
+% 一贯表示「依赖/参照」而非「推出」，这里语义正好：旁证不参与推导，
+% 只负责检验落点。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdgenesis}{%
+\begin{tikzpicture}[x=1cm,y=1cm,
+  gen/.style={rounded corners=3pt, draw=fdline, line width=0.7pt, fill=white,
+              inner sep=6pt, align=left, text width=6.85cm,
+              font=\footnotesize, text=fdink, anchor=north west},
+  genacc/.style={gen, draw=fdacc, line width=1.1pt},
+  ev/.style={rounded corners=3pt, draw=fdline, line width=0.6pt, fill=white,
+             inner sep=5pt, align=left, text width=4.35cm,
+             font=\scriptsize, text=fdink, anchor=north west}]
+
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south west] at (0.05,0.16)
+    {主链六步在左；右栏是别人各自独立走出的路，只负责检验落点。方括号为本章参考来源编号};
+
+  % ── 上半 · 时代命题 ──
+  \fill[fdmilk, rounded corners=4pt] (0.0,-0.05) rectangle (13.75,-8.80);
+  \node[font=\bfseries\footnotesize, text=fdacc, anchor=north west] at (0.18,-0.30)
+    {上半 · 时代命题：AI 改变了什么};
+
+  \node[fdnum] (c1) at (0.70,-1.25) {1};
+  \node[gen] (n1) at (1.10,-0.95)
+    {{\bfseries 两条技术事实，一内一外}\\[1.5pt]
+     内侧：生产系统装进了\textbf{非确定性组件}，同一输入可能给出不同输出，行为随模型与数据漂移。外侧：系统正在长出\textbf{面向智能体的接口}，调用方从人换成 agent [32]–[36]。};
+  \node[fdnum] (c2) at (0.70,-3.85) {2};
+  \node[gen] (n2) at (1.10,-3.55)
+    {{\bfseries 管理前提被推翻}\\[1.5pt]
+     老的组织问题从「可以绕过」被推到「绕不过」：合同写不完全 [13] · 指标一考核就变形 [20][21] · 上线没人用 [23] · 外来知识接不住 [17] —— 管理学研究了几十年的问题，上一小节那张表逐条对过。};
+  \node[fdnum] (c3) at (0.70,-6.65) {3};
+  \node[genacc] (n3) at (1.10,-6.35)
+    {{\bfseries 时代命题}\\[1.5pt]
+     \textbf{过去写在制度里的管理规则，必须被编译进系统本身}：权限边界 → 工具权限；验收标准 → 验收集＋流水线门禁；责任边界 → 哪些动作允许不经人确认执行。};
+
+  \node[ev] (e1) at (9.15,-1.30)
+    {{\bfseries\color{fdacc}同一判断的旁证}\\[1.5pt]
+     Google DORA 2025：AI 的首要角色是「放大器」，放大组织既有的强项和弱项 [30] —— 卡点在组织，不在模型。};
+  \node[ev] (e2) at (9.15,-4.35)
+    {{\bfseries\color{fdacc}供给侧各自走到第 3 步（厂商自述口径）}\\[1.5pt]
+     · Anthropic：治理在 AI 行动的当口被强制执行 [24]\\
+     · AWS Kiro：需求写成带验收准则的结构化规格文件 [28]\\
+     · GitHub：spec 成为共享的唯一事实源 [29]};
+
+  % ── 下半 · FDE ──
+  \fill[fdmilk, rounded corners=4pt] (0.0,-9.10) rectangle (13.75,-17.80);
+  \node[font=\bfseries\footnotesize, text=fdacc, anchor=north west] at (0.18,-9.35)
+    {下半 · FDE：先有岗位，才有方法论};
+
+  \node[fdnum] (c4) at (0.70,-10.35) {4};
+  \node[gen] (n4) at (1.10,-10.05)
+    {{\bfseries 岗位}\\[1.5pt]
+     编译是要人干的活，而且得有人对结果担责 —— 于是出现一个\textbf{承担落地不确定性}的岗位。风险转移是工作公理，三层证据见前文；四家公司 JD 的逐条对读见第 1 章 §1.2。};
+  \node[fdnum] (c5) at (0.70,-12.95) {5};
+  \node[gen] (n5) at (1.10,-12.65)
+    {{\bfseries 方法论：四层骨架 · 六道关卡}\\[1.5pt]
+     两条路建起来：\textbf{顺推}，从公理与理论传统往下演绎（「这四层的来路」那张表）；\textbf{倒推}，从已核失败案例的六类死法反推闸门（§2.5）。组合与命名是本书的主张，按三档可信度逐条标注。};
+  \node[fdnum] (c6) at (0.70,-15.75) {6};
+  \node[gen] (n6) at (1.10,-15.45)
+    {{\bfseries 检验：三条路互相补位}\\[1.5pt]
+     顺推防「自洽而无用」，倒推防「事后诸葛」，右栏的平行收敛防「一家之言」；再加五条写在项目开始前、事后可以被打脸的预言（下一小节）。};
+
+  \node[ev] (e3) at (9.15,-10.05)
+    {{\bfseries\color{fdacc}岗位在收敛（各自独立写下）}\\[1.5pt]
+     · OpenAI：「前线部署工程（FDE）是 OpenAI 把 AI 送进生产的方式」[27]\\
+     · Databricks：专业服务部门整体改组为 FDE 组织，计价与结果对齐 [31]\\
+     · 四家公司 JD 落到同一组动词（§1.2）};
+  \node[ev] (e4) at (9.15,-13.25)
+    {{\bfseries\color{fdacc}流程也在收敛（互不引用）}\\[1.5pt]
+     · OpenAI：七阶段流程，每阶段划「委托／复核／自己干」[25]\\
+     · OpenAI 企业七课，第一课「从评估开始」[26]\\
+     · Anthropic：每个阶段以提交一份产物收尾，产物链即审计轨迹 [24]};
+
+  % 主链箭头（挂在盒子锚点上，随高度自适应）
+  \draw[fdedgea] ([xshift=1.30cm]n1.south west) -- ([xshift=1.30cm]n2.north west)
+    node[midway, font=\scriptsize, text=fdmute, fill=fdmilk, inner sep=1.6pt] {于是};
+  \draw[fdedgea] ([xshift=1.30cm]n2.south west) -- ([xshift=1.30cm]n3.north west)
+    node[midway, font=\scriptsize, text=fdmute, fill=fdmilk, inner sep=1.6pt] {于是};
+  \draw[fdedgea] ([xshift=1.30cm]n3.south west) -- ([xshift=1.30cm]n4.north west)
+    node[midway, font=\scriptsize, text=fdmute, fill=white, inner sep=1.6pt] {编译得有人干};
+  \draw[fdedgea] ([xshift=1.30cm]n4.south west) -- ([xshift=1.30cm]n5.north west)
+    node[midway, font=\scriptsize, text=fdmute, fill=fdmilk, inner sep=1.6pt] {岗位得有方法};
+  \draw[fdedgea] ([xshift=1.30cm]n5.south west) -- ([xshift=1.30cm]n6.north west);
+
+  % 旁证的虚线（依赖/参照语义，不参与推导）
+  \draw[fddep] (e1.west) -- (n2.east);
+  \draw[fddep] (e2.west) -- (n3.east);
+  \draw[fddep] (e3.west) -- (n4.east);
+  \draw[fddep] (e4.west) -- (n5.east);
+
+  \node[fdout, anchor=north west, text width=13.15cm] at (0.05,-18.10)
+    {{\bfseries 右栏没有一份文献读过本书，也没有一家用过本书的词。}引号里的话是它们的原文中译（出处与逐字核对状态见章末），右栏到主链的对应是本书的归纳，不是它们的官方划分。平行收敛证明的不是本书的答案对，是本书回答的问题真 —— 答案对不对，由五条可被打脸的预言和每一章的「界」负责。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 · 上册第 1 章·职能之间那几道没人拥有的缝
+% 「为什么会出现这个岗位」有两种画法：画它干哪些活（成了职责清单），
+% 或者画传统分工在哪里断开（成了存在理由）。这里取后者。
+% 中间那一列故意用红底：缝隙里的问题不是没人会答，是没人负责答。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdseam}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south west] at (0.05,0.20)
+    {传统企业项目：责任按职能切开};
+  \node[font=\bfseries\scriptsize, text=fdstop, anchor=south west] at (4.55,0.20)
+    {缝里的问题 —— 不是没人会答，是没人负责答};
+  \node[font=\bfseries\scriptsize, text=fdacc, anchor=south west] at (9.75,0.20)
+    {这个岗位的存在理由};
+
+  \foreach \i/\y/\nm in {1/-0.10/{业务分析 · 产品},
+                         2/-1.55/{软件工程},
+                         3/-3.00/{质量保证},
+                         4/-4.45/{安全与运维},
+                         5/-5.90/{变革管理 · 培训}}{
+    \fill[white, rounded corners=3pt, draw=fdline, line width=0.8pt]
+      (0.05,\y) rectangle (4.05,\y-0.86);
+    \node[font=\footnotesize, text=fdink] at (2.05,\y-0.43) {\nm};
+  }
+
+  \foreach \i/\y/\q in {%
+    1/-1.02/{这个需求在真实工作流里成立吗？谁去现场看},
+    2/-2.47/{输出不确定的时候，什么算对？谁签字},
+    3/-3.92/{哪些动作允许自动执行，哪些必须停下来问人},
+    4/-5.37/{上线之后判断权归谁？谁能把它关掉},
+    5/-6.82/{下一次模型升级，客户自己接得住吗}}{
+    \fill[fdrose, rounded corners=2.4pt] (4.55,\y) rectangle (9.25,\y-0.72);
+    \node[font=\scriptsize, text=fdink, align=left, text width=4.30cm, anchor=north west]
+      at (4.68,\y-0.06) {\q};
+    \draw[fdthin, dash pattern=on 1.4pt off 1.6pt] (4.05,\y-0.36) -- (4.55,\y-0.36);
+    \draw[fdedgea] (9.25,\y-0.36) -- (9.72,\y-0.36);
+  }
+
+  \fill[fdtint, rounded corners=3pt, draw=fdacc, line width=1.0pt]
+    (9.75,-0.10) rectangle (13.75,-7.54);
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north] at (11.75,-0.32)
+    {FDE};
+  \node[fdcav, anchor=north, text width=3.5cm, align=center] at (11.75,-1.05)
+    {它不取代左边这五个职能。\\它对这五个职能之间没人拥有的缝负责 ——
+     缝里的每一个问题，正好对应六道关卡里的一道。};
+  \node[fdcav, anchor=north, text width=3.5cm, align=center] at (11.75,-4.30)
+    {所以这本书横跨六个学科：\\这不是作者的兴趣广泛，\\是这几道缝本来就分属不同学科。};
+
+  \node[fdout, fill=fdmilk, anchor=north west, text width=13.5cm] at (0.05,-8.05)
+    {{\bfseries 过去这几类问题分散在不同职业里；FDE 的特殊之处是它们在同一个客户项目里，
+     同时落到了同一个端到端负责的人身上。} 所以不是「管理学以前不重要、现在突然重要」 ——
+     是它们第一次被压缩成了一门职业能力。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 · 上册第 8 章·同一个模型的五年：修好了一半
+% 这张图存在的理由是文字讲不动：一条时间线上挂着两条指标，
+% 一条被修好了，另一条没有——而分野正好是「有没有被写进那篇论文」。
+% 所以两条指标必须并排画，各自一条带，不能合成一张表。
+% 判别力那条给青底（好转），告警负担那条给琥珀底（没动）——
+% 颜色在这里承担的是结论，不是装饰。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdepicchain}{%
+\begin{tikzpicture}[x=1cm,y=1cm,
+  tl/.style={rounded corners=3pt, draw=fdline, line width=0.8pt, fill=white,
+             inner sep=4pt, align=left, text width=1.95cm,
+             font=\scriptsize, text=fdink, anchor=north west}]
+
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south west] at (0.05,0.22)
+    {同一个败血症预测模型的五年 —— 被写进论文的那条指标修好了，没写进去的那条没动};
+
+  % 时间线卡片
+  \foreach \i/\x/\when/\what in {%
+    0/2.40/{上线前}/{厂商与合作医院联合报告，数百家医院采用},
+    1/4.85/{2020-04}/{密歇根大学关停：新冠期间假阳性过多},
+    2/7.30/{2021-06}/{外部验证发表：38455 次住院},
+    3/9.75/{此后}/{厂商改版，改为建议先用本院数据训练},
+    4/12.20/{2026-02}/{多中心前瞻复验：4 家系统，227091 次住院}%
+  }{
+    \node[tl] (c\i) at (\x,-0.10) {{\bfseries\color{fdacc}\when}\\\what};
+  }
+  \foreach \x in {4.45,6.90,9.35,11.80}{
+    \draw[fdedgea] (\x,-0.95) -- (\x+0.32,-0.95);
+  }
+
+  % 带一 · 判别力（修好了）
+  \fill[fdtint, rounded corners=3pt] (0.05,-2.30) rectangle (14.35,-3.42);
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.20,-2.42) {判别力};
+  \node[font=\scriptsize, text=fdmute, anchor=north west] at (0.20,-2.92) {AUROC};
+  \node[font=\bfseries\scriptsize, text=fdacc, anchor=north] at (3.38,-2.48) {0.76 -- 0.83};
+  \node[font=\scriptsize, text=fdmute, anchor=north] at (3.38,-2.98) {厂商口径};
+  \node[font=\bfseries\small, text=fdstop, anchor=north] at (8.28,-2.48) {0.63};
+  \node[font=\scriptsize, text=fdmute, anchor=north] at (8.28,-2.98) {实测};
+  \node[font=\bfseries\small, text=fdacc, anchor=north] at (13.18,-2.48) {0.82 -- 0.92};
+  \node[font=\scriptsize, text=fdacc, anchor=north] at (13.18,-2.98) {已修复};
+
+  % 带二 · 告警负担（没修）
+  \fill[fdamber, rounded corners=3pt] (0.05,-3.62) rectangle (14.35,-4.74);
+  \node[font=\bfseries\footnotesize, text=fdink, anchor=north west] at (0.20,-3.74) {告警负担};
+  \node[font=\scriptsize, text=fdmute, anchor=north west] at (0.20,-4.24) {阳性预测值};
+  \node[font=\scriptsize, text=fdmute, anchor=north] at (3.38,-3.80) {厂商未报};
+  \node[font=\bfseries\scriptsize, text=fdwarn, anchor=north, align=center] at (5.83,-3.80)
+    {告警 +43\%\\住院量 -35\%};
+  \node[font=\bfseries\small, text=fdstop, anchor=north] at (8.28,-3.80) {0.12};
+  \node[font=\scriptsize, text=fdmute, anchor=north] at (8.28,-4.30) {18\% 住院触发告警};
+  \node[font=\bfseries\small, text=fdstop, anchor=north] at (13.18,-3.80) {0.13 -- 0.26};
+  \node[font=\bfseries\scriptsize, text=fdstop, anchor=north] at (13.18,-4.30) {未修复};
+
+  % 竖向对位虚线
+  \foreach \x in {3.38,8.28,13.18}{
+    \draw[fdthin, dash pattern=on 1.2pt off 1.6pt] (\x,-1.55) -- (\x,-2.30);
+  }
+
+  \node[fdout, fill=fdmilk, anchor=north west, text width=14.1cm] at (0.05,-5.02)
+    {{\bfseries 分野在于哪条指标被写进了那篇论文。} 2021 年那篇批的是判别力，
+     于是判别力被优化了；临床上真正受不了的是告警太多，而那个数字五年基本没动。
+     {\bfseries 顺带还有一条}：改版之后，四家医院之间的 AUROC 仍相差约 0.1 ——
+     厂商测的哪怕是四家医院的平均值，也不是你这个客户这里的值。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 · 下册第 9 章·回流闭环：改写和故障怎么变成回归集
+% 这张图画的是「验收集单调增长」这句话的机制。上册第 2 章把它当性质说，
+% 这里让它有一条能跑的路：四个入口 → 候选池 → 周复盘签字 → 三层集 → 门禁。
+% 三个节奏用三种线宽：每天（细）、每周（中）、每次发布（粗）。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdfeedback}{%
+\begin{tikzpicture}[x=1cm,y=1cm,
+  stg/.style={rounded corners=3pt, draw=fdline, line width=0.8pt, fill=white,
+              inner sep=5pt, align=center, font=\footnotesize, text=fdink},
+  inp/.style={rounded corners=2.4pt, draw=none, fill=fdpale, inner sep=4pt,
+              align=left, font=\scriptsize, text=fdink, text width=2.9cm}]
+
+  % 线上
+  \node[stg, minimum width=2.6cm, minimum height=1.0cm, fill=fdtint, draw=fdacc] (live) at (1.6,0) {线上系统};
+
+  % 四个入口
+  \node[inp] (i1) at (5.4,1.65) {{\bfseries 人工复核改写}\\分母是进复核的决策};
+  \node[inp] (i2) at (5.4,0.55) {{\bfseries 线上故障 / 工单}\\含当时的检索片段};
+  \node[inp] (i3) at (5.4,-0.55) {{\bfseries 评估管道告警}\\漂移分三类};
+  \node[inp] (i4) at (5.4,-1.65) {{\bfseries 投诉 / 审计发现}\\来自外部};
+  \foreach \i in {1,2,3,4}{ \draw[fdthin] (live.east) -- (i\i.west); }
+  \node[fdlab] at (3.5,2.35) {每天 · 自动};
+
+  % 候选池
+  \node[stg, minimum width=2.4cm, minimum height=2.2cm, fill=fdmilk] (pool) at (9.0,0)
+    {{\bfseries 候选池}\\{\scriptsize 能复现的输入}\\{\scriptsize ＋当时的版本}};
+  \foreach \i in {1,2,3,4}{ \draw[fdedge] (i\i.east) -- (pool.west |- i\i.east); }
+
+  % 周复盘
+  \node[stg, minimum width=2.6cm, minimum height=2.2cm, fill=fdamber, draw=fdwarn] (rev) at (12.4,0)
+    {{\bfseries 周复盘}\\{\scriptsize 业务方签期望输出}\\{\scriptsize 定归属层}\\{\scriptsize 合并重复}};
+  \draw[fdedgea, line width=1.3pt] (pool.east) -- (rev.west);
+  \node[fdlab] at (10.7,1.55) {每周 · 人签字};
+
+  % 三层集（竖排在右）
+  \node[stg, minimum width=2.4cm, fill=fdtint] (gold) at (12.4,-3.0) {黄金集};
+  \node[stg, minimum width=2.4cm, fill=fdrose] (adv)  at (9.4,-3.0) {对抗集};
+  \node[stg, minimum width=2.4cm, fill=fdtint, draw=fdacc, line width=1.1pt] (reg) at (6.4,-3.0) {回归集};
+  \draw[fdedgea, line width=1.3pt] (rev.south) -- (gold.north);
+  \draw[fdedgea, line width=1.3pt] (rev.south) -- ++(0,-0.55) -| (adv.north);
+  \draw[fdedgea, line width=1.3pt] (rev.south) -- ++(0,-0.55) -| (reg.north);
+  \node[fdlab] at (10.9,-2.05) {新常态 → 黄金};
+  \node[fdlab] at (7.9,-2.05) {边界 / 拒答 → 对抗};
+  \node[fdlab, text=fdacc, font=\bfseries\scriptsize] at (5.2,-2.05) {复发 → 回归};
+  \node[fdcav, anchor=north, text width=2.4cm, align=center] at (reg.south) {只标过时\\永不删除};
+
+  % 门禁与回线上
+  \node[stg, minimum width=2.4cm, minimum height=0.9cm, fill=white, draw=fdstop, line width=1.0pt] (gate) at (1.6,-3.0)
+    {{\bfseries CI 门禁}\\{\scriptsize 回归零容忍}};
+  \draw[fdedge, line width=1.6pt] (reg.west) -- (gate.east);
+  \draw[fdedge, line width=1.6pt] (gate.north) -- (live.south);
+  \node[fdlab] at (0.25,-1.5) {每次发布};
+
+  \node[fdout, fill=fdmilk, anchor=north west, text width=13.6cm] at (0.2,-4.35)
+    {{\bfseries 「验收集单调增长」在这里有了可测的形态：}回流率＝上周的改写与故障里进入用例库的比例；
+     回归集条数随时间只升不降。两条曲线一起平了，不是系统好了，是闭环断了。};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 · 下册第 2 章·命令流水线：每条命令落一份产物
+% 原来是一段等宽字符画，十条命令挤在一行，产物那行对不齐。
+% 改成两行五格，每格上命令下产物；底部一条带写三条顺序纪律——
+% 它们才是这一节的论点，命令名只是 2026 年的实现。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdspecpipeline}{%
+\begin{tikzpicture}[x=1cm,y=1cm,
+  cmd/.style={rounded corners=3pt, draw=fdacc, line width=0.9pt, fill=white,
+              minimum width=2.75cm, minimum height=0.62cm, font=\bfseries\footnotesize\ttfamily, text=fdacc},
+  art/.style={rounded corners=2.4pt, draw=none, fill=fdpale, inner sep=4pt,
+              text width=2.55cm, align=center, font=\scriptsize, text=fdink, anchor=north}]
+  \foreach \r/\y in {0/0, 1/-2.35}{}
+  \foreach \i/\x/\c/\a in {%
+    0/0.00/{/constitution}/{constitution.md\\约法三章},
+    1/3.05/{/specify}/{spec.md\\编号、可测的规格},
+    2/6.10/{/clarify}/{回填 spec.md\\把歧义问死},
+    3/9.15/{/prototype}/{prototype/\\可点原型＋设计说明},
+    4/12.20/{/plan}/{plan.md ＋ 数据模型\\接口契约、验收剧本}}{
+    \node[cmd] (c\i) at (\x+1.375,0) {\c};
+    \node[art] at (\x+1.375,-0.42) {\a};
+  }
+  \foreach \i/\x/\c/\a in {%
+    5/0.00/{/tasks}/{tasks.md\\纵向切片},
+    6/3.05/{/checklist}/{checklists/\\写码前的验收清单},
+    7/6.10/{/analyze}/{核对报告\\规格 ↔ 原型 ↔ 实现},
+    8/9.15/{/implement}/{代码与制品},
+    9/12.20/{/converge}/{门禁结果\\端到端跑通}}{
+    \node[cmd] (c\i) at (\x+1.375,-2.35) {\c};
+    \node[art] at (\x+1.375,-2.77) {\a};
+  }
+  \foreach \a/\b in {0/1,1/2,2/3,3/4,5/6,6/7,7/8,8/9}{ \draw[fdedgea] (c\a.east) -- (c\b.west); }
+  \draw[fdedgea] (c4.east) -- (14.25,0) -- (14.25,-1.62) -- (-0.30,-1.62) -- (-0.30,-2.35) -- (c5.west);
+
+  \fill[fdmilk, rounded corners=3pt] (0,-4.05) rectangle (13.95,-5.55);
+  \node[font=\bfseries\scriptsize, text=fdacc, anchor=north west] at (0.18,-4.15) {三条顺序纪律 —— 命令名会换，这三条不会};
+  \node[fdcav, anchor=north west, text width=4.3cm] at (0.18,-4.55)
+    {{\bfseries clarify 在 plan 之前}\\规格最大的问题是欠规格，先把盲点逼出来};
+  \node[fdcav, anchor=north west, text width=4.3cm] at (4.85,-4.55)
+    {{\bfseries prototype 在 clarify 之后}\\原型是界面的真相源；行为与技术栈的真相在规格和宪法，冲突时后者赢};
+  \node[fdcav, anchor=north west, text width=4.3cm] at (9.52,-4.55)
+    {{\bfseries tasks 纵向切片}\\「上传→解析→检查→出清单」一竖到底，第一片当天能演示；和上册第 3 关同一条纪律};
+\end{tikzpicture}}
+
+% ═══════════════════════════════════════════════════════════════
+% 图 · 下册第 6 章·七要素落到哪一层
+% §6.1 那张表读起来是七行清单，看不出「层」。画成五条横带，七个要素
+% 当芯片钉在各自的层上，右边写「优先选」——一眼看出可替换优先是什么意思。
+% Agent 那条线故意画两次：走工具接口的实线，直连存储的虚线打叉。
+% ═══════════════════════════════════════════════════════════════
+\newcommand{\fdontolayers}{%
+\begin{tikzpicture}[x=1cm,y=1cm,
+  lay/.style={rounded corners=3pt, draw=fdline, line width=0.7pt, fill=white},
+  chip/.style={rounded corners=2.4pt, draw=fdacc, line width=0.8pt, fill=fdtint,
+               minimum width=1.5cm, minimum height=0.52cm, font=\bfseries\footnotesize, text=fdink},
+  pref/.style={font=\scriptsize, text=fdmute, anchor=west, text width=6.1cm, align=left}]
+  \foreach \i/\y/\nm/\chips/\p in {%
+    0/0/{数据模型}/{对象,状态}/{开放 Schema：JSON Schema、OpenAPI，或就是表结构；状态与迁移条件显式建表},
+    1/-1.05/{存储层}/{关系}/{关系数据库优先，核心查询是变长路径遍历时才上图数据库},
+    2/-2.10/{执行层}/{动作,判据}/{工作流引擎、规则引擎、服务 API；判据与动作分离},
+    3/-3.15/{授权层}/{权限}/{IAM、RBAC / ABAC、策略引擎},
+    4/-4.20/{事件层}/{证据}/{消息队列 ＋ 事件日志 ＋ 审计存储}}{
+    \draw[lay] (0,\y) rectangle (14.6,\y-0.92);
+    \node[font=\bfseries\footnotesize, text=fdacc, anchor=west] at (0.2,\y-0.46) {\nm};
+    \node[pref] at (8.3,\y-0.46) {\p};
+  }
+  \node[chip] at (3.1,-0.46) {对象}; \node[chip] at (4.8,-0.46) {状态};
+  \node[chip] at (3.1,-1.51) {关系};
+  \node[chip] at (3.1,-2.56) {动作}; \node[chip] at (4.8,-2.56) {判据};
+  \node[chip] at (3.1,-3.61) {权限};
+  \node[chip] at (3.1,-4.66) {证据};
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south west] at (2.35,0.12) {七要素};
+  \node[font=\bfseries\scriptsize, text=fdmute, anchor=south west] at (8.3,0.12) {优先选 —— 可替换优先};
+
+  % Agent 两条线
+  \node[rounded corners=3pt, draw=fdstop, line width=0.9pt, fill=white, font=\bfseries\footnotesize, text=fdink,
+        minimum width=1.6cm, minimum height=0.6cm] (ag) at (-1.9,-2.56) {Agent};
+  \draw[fdedgea, line width=1.1pt] (ag.east) -- (0,-2.56);
+  \node[fdlab, text=fdacc] at (-0.95,-2.2) {工具接口};
+  \draw[fddep, draw=fdstop] (ag.south) |- (0,-1.51);
+  \node[font=\bfseries\small, text=fdstop] at (-0.55,-1.51) {×};
+  \node[fdcav, anchor=north, text width=2.0cm, align=center] at (-1.9,-2.95) {能做的动作集合\\＝人能做的};
+
+  \node[fdout, fill=fdmilk, anchor=north west, text width=14.2cm] at (0,-5.4)
+    {{\bfseries 两条跨层规矩：}Agent 通过工具接口调动作，不直连底层数据库——不能多出一条旁路；
+     元数据要能导出、能版本控制、能做差异审查——这是「本体属于客户」的工程落点。};
+\end{tikzpicture}}

@@ -1,0 +1,92 @@
+% ─────────────────────────────────────────────────────────────
+% 客户现场全景图（下册附录 E）。TikZ 绘制，不引入图片依赖。
+%
+% 结构：左侧主干串起九个阶段，每段给「最小集 / 全集追加」两行；
+% 右侧一条结果柱，分三段标出证据、控制、接管各自攒在哪几步；
+% 最左三条回流边，用线型区分，图例放在图下方。
+%
+% ⚠ 两条踩过的坑，改图时别再犯：
+%   1. 不要把样式命名为 name —— 它是 TikZ 保留键（\node (x) 内部用它
+%      命名节点），覆盖后节点命名会触发样式里的 anchor，报 /anchor 未知。
+%   2. 不要旋转中文标签 —— xeCJK 不会正确旋转 CJK 字形，出来是坏的。
+%      所有标签一律横排。
+% ─────────────────────────────────────────────────────────────
+\usetikzlibrary{calc,positioning,arrows.meta,backgrounds,fit}
+
+\definecolor{pnink}{HTML}{121A26}
+\definecolor{pnacc}{HTML}{0E8C7B}
+\definecolor{pnmute}{HTML}{6B7A8F}
+\definecolor{pnline}{HTML}{C7D0DB}
+\definecolor{pnb1}{HTML}{DCEFEA}   % 证据
+\definecolor{pnb2}{HTML}{FBE7D2}   % 控制
+\definecolor{pnb3}{HTML}{E4E1F5}   % 接管
+
+\newcommand{\fdepanorama}{%
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  stage/.style={circle, draw=pnacc, line width=0.9pt, fill=white,
+                minimum size=7.4mm, inner sep=0pt,
+                font=\bfseries\small, text=pnacc},
+  stagename/.style={anchor=west, font=\bfseries\normalsize, text=pnink},
+  minset/.style={anchor=west, font=\footnotesize, text=pnacc},
+  fullset/.style={anchor=west, font=\footnotesize, text=pnmute},
+  blab/.style={font=\bfseries\footnotesize, text=pnink, anchor=north},
+  bsub/.style={font=\scriptsize, text=pnmute, anchor=north},
+]
+
+% ── 右侧结果柱：一列三段，标签全部横排 ──────────────────
+\begin{scope}[on background layer]
+  \fill[rounded corners=3pt, pnb1] (11.95,-12.45) rectangle (13.55,-3.95);
+  \fill[rounded corners=3pt, pnb2] (11.95,-14.75) rectangle (13.55,-13.15);
+  \fill[rounded corners=3pt, pnb3] (11.95,-19.35) rectangle (13.55,-15.45);
+\end{scope}
+\node[blab] at (12.75,-4.25) {证据};
+\node[bsub, align=center] at (12.75,-4.85) {定界写定义\\切片跑记录\\验收收敛};
+\node[blab] at (12.75,-13.45) {控制};
+\node[bsub] at (12.75,-14.05) {只有这一关};
+\node[blab] at (12.75,-15.75) {接管};
+\node[bsub, align=center] at (12.75,-16.35) {只能在这里\\攒，无法提前};
+
+% ── 主干 ─────────────────────────────────────────────────
+\draw[pnline, line width=1.1pt] (0,0.2) -- (0,-19.6);
+
+% ── 九个阶段 ─────────────────────────────────────────────
+\foreach \i/\y/\nm/\mn/\fl in {
+  1/0/{进场前 · 能不能做}/{查机器能不能装、数据审批要走多久}/{合规三问、信创清单、总分包责任边界},
+  2/-2.3/{第 1 关 选题 · 值不值得做}/{3 场情境访谈；一句受访者确认过的问题陈述}/{影子跟随、流程挖掘、七种需求错位排查},
+  3/-4.6/{第 2 关 定界 · 做到哪儿算完}/{范围四段；客户书面确认假设成立}/{完整 SOW、变更单、退出三分支、分包具名},
+  4/-6.9/{第 3 关 切片 · 先交最窄一条}/{真实数据端到端跑通一次，客户能现场复现}/{技术债登记表、四类风险优先级},
+  5/-9.2/{最小可执行业务模型}/{对象、动作、判据三样写下来}/{七要素齐全；权限对齐审批制度；证据字段},
+  6/-11.5/{第 4 关 验收 · 证明它是对的}/{20 条真实历史案例 + 一个能跑的评分脚本}/{三层评估集、CI 门禁、裁判模型、签字},
+  7/-13.8/{第 5 关 上线 · 让它不炸}/{灰度 + 回滚脚本 + 一个明确的值班人}/{就绪清单、复核队列、静默失败监控},
+  8/-16.1/{第 6 关 采用 · 让人真的用}/{种子用户、采用率埋点、一次留纪要的复盘}/{champion 网络、培训、连续 4 周达阈值},
+  9/-18.4/{撤场 · 交得掉才算完}/{交接文档 + 一个具名的接手人}/{离场清单、运维包、验收集移交}%
+}{
+  \node[stage] (s\i) at (0,\y) {\i};
+  \node[stagename] at (0.6,\y+0.34) {\nm};
+  \node[minset]    at (0.6,\y-0.08) {最小集　\mn};
+  \node[fullset]   at (0.6,\y-0.46) {全集追加　\fl};
+  \draw[pnline, line width=0.4pt] (0.52,\y-0.80) -- (11.6,\y-0.80);
+}
+
+% ── 三条回流边：用线型区分，标签放图例，不旋转 ──────────
+\draw[pnacc, line width=0.7pt, -{Stealth[length=4pt]}, opacity=0.8]
+  (s8.west) .. controls (-1.9,-16.1) and (-1.9,-2.3) .. (s2.west);
+\draw[pnacc, line width=0.7pt, dashed, -{Stealth[length=4pt]}, opacity=0.8]
+  (s7.west) .. controls (-1.2,-13.8) and (-1.2,-6.9) .. (s4.west);
+\draw[pnacc, line width=0.7pt, dotted, -{Stealth[length=4pt]}, opacity=0.8]
+  (s6.west) .. controls (-0.6,-11.5) and (-0.6,-4.6) .. (s3.west);
+
+% ── 图例 ─────────────────────────────────────────────────
+\draw[pnacc, line width=0.7pt] (0.0,-20.4) -- (0.7,-20.4);
+\node[anchor=west, font=\scriptsize, text=pnmute] at (0.8,-20.4)
+  {采用阶段发现新用例 → 回第 1 关};
+\draw[pnacc, line width=0.7pt, dashed] (5.3,-20.4) -- (6.0,-20.4);
+\node[anchor=west, font=\scriptsize, text=pnmute] at (6.1,-20.4)
+  {上线暴露生产缺口 → 回第 3 关重切一片};
+\draw[pnacc, line width=0.7pt, dotted] (11.4,-20.4) -- (12.1,-20.4);
+\node[anchor=west, font=\scriptsize, text=pnmute] at (12.2,-20.4)
+  {指标谈不拢 → 回第 2 关};
+
+\end{tikzpicture}%
+}

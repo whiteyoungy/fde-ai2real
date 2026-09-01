@@ -1,0 +1,132 @@
+% ─────────────────────────────────────────────────────────────
+% 封面。TikZ 绘制，不引入图片依赖，任意缩放不失真。
+%
+% 排版驱动，图形只做背景纹理：左下密、右上疏的节点场，
+% 对应 FDE 的处境——越靠近客户现场，能依托的东西越少。
+% 底部用一条实色带托住文字，从结构上杜绝纹理压字。
+% ─────────────────────────────────────────────────────────────
+\usepackage{tikz}
+\usetikzlibrary{calc}
+
+% ── 分册变量 ────────────────────────────────────────────────
+% 两册共用这一份封面，差异只有四处文字。各册在 metadata-volN.yaml
+% 的 header-includes 里 \def 覆盖；没定义时落到下面的默认值。
+\providecommand{\covervolume}{}
+\providecommand{\coversubtitle}{从技术栈到客户现场的\\完整落地打法}
+\providecommand{\coverstats}{29 章正文\ \ ·\ \ 12 个动手 Lab}
+\providecommand{\coverstatsnote}{每个 Lab 都有 verify.sh，全项通过才算完成}
+
+\definecolor{coverbg}{HTML}{05080F}      % 近黑
+\definecolor{coverband}{HTML}{0B1220}    % 底部色带，比底色略亮
+\definecolor{coverink}{HTML}{F5F8FD}     % 标题白
+\definecolor{coveracc}{HTML}{35D6C0}     % 唯一主色：青
+\definecolor{coverdot}{HTML}{3E5A80}     % 节点色
+
+\renewcommand{\maketitle}{%
+\begin{titlepage}
+\thispagestyle{empty}
+\begin{tikzpicture}[remember picture, overlay]
+
+  \fill[coverbg] (current page.south west) rectangle (current page.north east);
+
+  % ── 节点场：左下密、右上疏 ───────────────────────────────
+  \begin{scope}
+    \clip (current page.south west) rectangle (current page.north east);
+    \foreach \i in {0,...,17}{
+      \foreach \j in {0,...,26}{
+        % d：离左下角的归一化距离，越大越靠近「前沿」
+        \pgfmathsetmacro{\d}{sqrt((\i/17)*(\i/17) + (\j/26)*(\j/26))/1.414}
+        % 抽稀：远处成倍变疏
+        \pgfmathtruncatemacro{\keep}{(\d < 0.30) ? 1 :
+                                ((\d < 0.52) ? ((mod(\i+\j,2)==0) ? 1 : 0) :
+                                ((\d < 0.74) ? ((mod(\i,2)==0 && mod(\j,2)==0) ? 1 : 0) :
+                                               ((mod(\i,4)==0 && mod(\j,4)==0) ? 1 : 0)))}
+        % 亮度与尺寸同步衰减，让梯度真的看得出来
+        \pgfmathsetmacro{\op}{max(0.04, 0.62 - \d*0.74)}
+        \pgfmathsetmacro{\sz}{max(0.6, 2.9 - \d*2.7)}
+        \ifnum\keep=1
+          \fill[coverdot, opacity=\op]
+            ($(current page.south west) + (\i*1.24cm + 0.55cm, \j*1.17cm + 0.45cm)$)
+            circle (\sz pt);
+        \fi
+      }
+    }
+  \end{scope}
+
+  % ── 底部实色带：托住文字，纹理不会压上来 ─────────────────
+  \fill[coverband]
+    (current page.south west) rectangle
+    ($(current page.south east) + (0, 5.6cm)$);
+  \draw[coveracc, opacity=0.75, line width=2.4pt]
+    ($(current page.south west) + (0, 5.6cm)$) --
+    ($(current page.south east) + (0, 5.6cm)$);
+
+  % ── 顶部标签 ─────────────────────────────────────────────
+  \node[anchor=north west, text=coveracc, opacity=0.92,
+        font=\sffamily\bfseries\fontsize{9.5}{12}\selectfont]
+    at ($(current page.north west) + (2.4cm, -3.0cm)$)
+    {FDE\ \ ·\ \ FORWARD  DEPLOYED  ENGINEER};
+  \draw[coveracc, opacity=0.45, line width=0.7pt]
+    ($(current page.north west) + (2.4cm, -3.55cm)$) --
+    ($(current page.north west) + (9.6cm, -3.55cm)$);
+
+  % ── 主标题 ───────────────────────────────────────────────
+  % 断行位置就是书名的冒号：第一行是岗位，第二行是这本书的主张。
+  % FDE 三个字母必须出现在封面上，而且要落在第一行——读者在书架上
+  % 和招聘启事上认的是这个缩写，不是中文全称。
+  %
+  % 第一行 10.8 个全角字宽，41pt 下约 15.6cm，从 2.3cm 起排到 17.9cm，
+  % 右边还剩 3.1cm。换更长的书名要重算这一处，不然会顶到页边。
+  \node[anchor=north west, text=coverink, font=\bfseries\fontsize{41}{52}\selectfont]
+    at ($(current page.north west) + (2.3cm, -5.2cm)$)
+    {前线部署工程师\textcolor{coveracc}{（FDE）}};
+  \node[anchor=north west, text=coverink, font=\bfseries\fontsize{41}{52}\selectfont]
+    at ($(current page.north west) + (2.3cm, -7.3cm)$)
+    {把 AI 交付到真实世界};
+
+  % ── 分册徽标。没有分册时 \covervolume 为空，整块不画 ──────
+  \ifx\covervolume\empty\else
+    \node[anchor=north west, text=coveracc, opacity=0.95,
+          font=\sffamily\bfseries\fontsize{20}{26}\selectfont]
+      at ($(current page.north west) + (2.4cm, -9.7cm)$)
+      {\covervolume};
+  \fi
+
+  % ── 副标题 ───────────────────────────────────────────────
+  \draw[coveracc, line width=2.4pt]
+    ($(current page.north west) + (2.4cm, -11.3cm)$) --
+    ($(current page.north west) + (2.4cm, -13.0cm)$);
+  \node[anchor=north west, text=coverink, opacity=0.86,
+        font=\fontsize{14}{21}\selectfont, align=left]
+    at ($(current page.north west) + (3.05cm, -11.25cm)$)
+    {\coversubtitle};
+
+  % ── 色带内：这本书的身份 ─────────────────────────────────
+  \node[anchor=north west, text=coveracc, opacity=0.95,
+        font=\sffamily\bfseries\fontsize{15}{19}\selectfont]
+    at ($(current page.south west) + (2.4cm, 4.65cm)$)
+    {\coverstats};
+  \node[anchor=north west, text=coverink, opacity=0.55,
+        font=\sffamily\fontsize{9.5}{13}\selectfont]
+    at ($(current page.south west) + (2.4cm, 3.6cm)$)
+    {\coverstatsnote};
+
+  \draw[coverink, opacity=0.14, line width=0.6pt]
+    ($(current page.south west) + (2.4cm, 2.5cm)$) --
+    ($(current page.south east) + (-2.4cm, 2.5cm)$);
+
+  \node[anchor=south west, text=coverink, opacity=0.9, font=\fontsize{12}{16}\selectfont]
+    at ($(current page.south west) + (2.4cm, 1.45cm)$)
+    {whiteyoungy};
+  \node[anchor=south east, text=coveracc, opacity=0.8,
+        font=\sffamily\fontsize{12}{16}\selectfont]
+    at ($(current page.south east) + (-2.4cm, 1.45cm)$)
+    {2026};
+  \node[anchor=south west, text=coverink, opacity=0.45,
+        font=\sffamily\fontsize{8.5}{11}\selectfont]
+    at ($(current page.south west) + (2.4cm, 0.75cm)$)
+    {© 2026 whiteyoungy　·　非商业使用依 CC BY-NC 4.0 开放　·　商业使用须书面授权：whiteyoung@gmail.com};
+
+\end{tikzpicture}
+\end{titlepage}
+}

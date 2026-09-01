@@ -1,0 +1,12 @@
+image:
+  repository: fde-offline-demo
+  tag: "1.0.0"
+  # 断网场景的关键一行。默认的 IfNotPresent/Always 在某些 K8s 发行版配置下
+  # 仍会尝试联网核对镜像摘要，Never 强制只用本地已加载的镜像。
+  pullPolicy: Never
+replicaCount: 1
+service:
+  port: 8080
+resources:
+  requests: {cpu: 50m, memory: 64Mi}
+  limits:   {cpu: 200m, memory: 128Mi}

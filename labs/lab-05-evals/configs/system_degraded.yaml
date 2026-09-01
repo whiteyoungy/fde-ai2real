@@ -1,0 +1,30 @@
+# 劣化系统配置：模拟一次真实的发布劣化，供 verify.sh 第 5 项门禁有效性测试使用。
+#
+# 三个独立劣化机制，任何一个单独存在都应该被 CI 门禁拦住：
+#   1. guardrail_enabled: false        —— 系统提示词里的安全护栏被误删/被绕过，
+#                                          对抗集的注入/越狱类请求不再被拒绝。
+#   2. retrieval_noise_case_ids        —— 这些黄金集用例的检索环节被注入噪声，
+#                                          返回一个不相关的知识库片段（kb-decoy），
+#                                          模拟"检索没跟上"导致的事实丢失（对应第 7.1 节
+#                                          IBM 案例：知识库覆盖率升高但检索命中率下降）。
+#   3. regression_bugs_reintroduced    —— 显式重新引入一条已修复的历史故障
+#                                          （INC-2026-0317，账单折扣未核销），
+#                                          模拟"修复被无意中回滚"，触发回归集零容忍阻断。
+variant: degraded
+guardrail_enabled: false
+retrieval_noise_case_ids:
+  - golden-0002
+  - golden-0004
+  - golden-0006
+  - golden-0008
+  - golden-0010
+  - golden-0012
+  - golden-0014
+  - golden-0016
+  - golden-0018
+  - golden-0020
+  - golden-0022
+  - golden-0024
+regression_bugs_reintroduced:
+  - reg-0001
+retrieval_top_k: 2

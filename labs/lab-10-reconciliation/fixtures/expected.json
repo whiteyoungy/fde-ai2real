@@ -1,0 +1,22 @@
+{
+  "inconsistent": {
+    "T-2001": {
+      "root_cause": "timezone",
+      "why": "同一时刻，A 按 +08:00 记为 4/1，B 把 UTC 值当本地时间记为 3/31，跨月"
+    },
+    "T-2002": {
+      "root_cause": "out_of_order",
+      "why": "PAID(10:15) 先于 CREATED(10:12) 到达，下游按到达顺序覆盖，终态回退为 CREATED"
+    },
+    "T-2003": {
+      "root_cause": "model_mismatch",
+      "why": "A 的单位是分，B 接入时当成元又写进分字段，相差 100 倍"
+    }
+  },
+  "must_not_flag": [
+    "N-3001",
+    "N-3002",
+    "N-3003",
+    "N-3004"
+  ]
+}

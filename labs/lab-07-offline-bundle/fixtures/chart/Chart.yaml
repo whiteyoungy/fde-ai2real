@@ -1,0 +1,6 @@
+apiVersion: v2
+name: fde-offline-demo
+description: Lab-07 离线交付演示服务
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

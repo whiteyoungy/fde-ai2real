@@ -1,0 +1,15 @@
+{
+  "_note": "单价表。数值为每百万 token 的价格（元），仅用于本 Lab 的成本聚合演算，不是任何厂商的实时报价——正式项目里这张表必须从厂商公开定价页取数并标注取数日期，且要能随时更新。把单价硬编码进代码是成本看板最常见的失效原因：调价那天所有历史成本都跟着变了。",
+  "_currency": "CNY",
+  "_per_tokens": 1000000,
+  "models": {
+    "deepseek-chat": {"input": 2.0, "output": 8.0},
+    "qwen2.5-0.5b-local": {"input": 0.0, "output": 0.0, "_note": "本地推理无 API 费用，但不等于零成本——机器折旧与电力应在别处核算"},
+    "bge-small-zh-v1.5": {"input": 0.0, "output": 0.0, "_note": "本地 embedding"}
+  },
+  "business_actions": {
+    "answer_question": {"desc": "用户问一个问题，端到端拿到答案", "_note": "一次业务动作可能包含多次模型调用"},
+    "summarize_ticket": {"desc": "把一张工单压缩成摘要"},
+    "draft_reply": {"desc": "起草一封回复"}
+  }
+}

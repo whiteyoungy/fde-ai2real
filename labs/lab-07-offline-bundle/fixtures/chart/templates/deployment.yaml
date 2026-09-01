@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels: {app: {{ .Chart.Name }}}
+  template:
+    metadata:
+      labels: {app: {{ .Chart.Name }}}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports: [{containerPort: {{ .Values.service.port }}}]
+          resources: {{ toYaml .Values.resources | nindent 12 }}
+          # 模型/大依赖加载慢的服务要靠 startupProbe 撑过冷启动，
+          # 否则 liveness 会在加载完成前就把它判死并反复重启（见 13.1 节）。
+          startupProbe:
+            httpGet: {path: /healthz, port: {{ .Values.service.port }}}
+            failureThreshold: 30
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /healthz, port: {{ .Values.service.port }}}
+            periodSeconds: 10
