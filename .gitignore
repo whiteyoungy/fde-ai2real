@@ -21,3 +21,5 @@ FDE-*/
 *.pdf
 # 朋友圈转发图：slides/poster.py 生成，和 pptx 同样不入库
 slides/*.png
+# 公众号排期/文风与真实发布节奏可反推作者身份，不进公开镜像库
+docs/wechat/
