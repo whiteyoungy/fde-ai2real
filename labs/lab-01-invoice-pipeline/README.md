@@ -1,6 +1,6 @@
 # Lab-01 · 脏 PDF 发票摄取管道
 
-服务《前线部署工程师（FDE）：把 AI 交付到真实世界》下册第 5 章 §5.1（结构化抽取：模型抽取 → 强类型校验 →
+服务《前线部署工程师（FDE）：把 AI 交付到真实世界》下册第 4 章 §4.1（结构化抽取：模型抽取 → 强类型校验 →
 自纠错回灌 → 隔离队列）。本 Lab 把这套机制做成一条能真跑通的最小管道，处理
 10 份现场风格的"脏"发票 PDF（7 份可解析但格式各异，3 份结构性破损）。
 
@@ -156,9 +156,9 @@ python3 -m src.check_results --out results --manifest fixtures/expected/manifest
    （1～5）和金额自洽容差，画出无 key 路径下归类正确率的曲线，找到
    "多给模型几次机会"边际收益开始下降的拐点。
 
-## 与下册第 5 章的对应关系
+## 与下册第 4 章的对应关系
 
-| 下册第 5 章位置 | 本 Lab 对应实现 |
+| 下册第 4 章位置 | 本 Lab 对应实现 |
 |---|---|
 | 11.1 结构化抽取四段式（模型抽取 → 强类型校验 → 自纠错回灌 → 隔离队列） | `src/extractor.py::extract_with_self_correction` + `src/schema.py` |
 | "校验层不能只查格式，还要防编造" | `src/schema.py::check_grounding`；无 key 路径下 `qwen2.5:0.5b` 在 `bad-10` 上真实编造过发票号，被此机制当场拦下（见 `results/records/bad-10-missing-critical.json` 的 `attempts`） |

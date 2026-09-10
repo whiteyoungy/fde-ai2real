@@ -13,7 +13,7 @@ import sys
 import pathlib
 
 HERE = pathlib.Path(__file__).resolve().parent
-DAYS = ["day1", "day2", "day3", "day4", "day5", "quotes", "exec"]
+DAYS = ["day1", "day2", "day3", "day4", "day5", "quotes", "exec", "fivesix"]
 
 
 def main():
