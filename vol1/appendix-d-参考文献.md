@@ -581,6 +581,28 @@
 
 [268] “MCP joins the Agentic AI Foundation”. MCP 官方博客，2025-12-09. <https://blog.modelcontextprotocol.io/posts/2025-12-09-mcp-joins-agentic-ai-foundation/>，检索于 2026-08-31（§2；逐字原文，月 SDK 下载 9700 万+/活跃服务器 1 万+ 为官方口径；与 Linux 基金会同日通稿互证，后者“Fortune 500 deployments”一句无明细，不单独据以立论）
 
+[269] “OpenAI launches the OpenAI Deployment Company to help businesses build around intelligence”. OpenAI 官方公告，2026-05-11. <https://openai.com/index/openai-launches-the-deployment-company/>，检索于 2026-10-09（上册第 2 章；openai.com 拒绝直接抓取，经 r.jina.ai 只读代理取得正文，引语逐字核对；收购 Tomoro 公告时尚待交割）
+
+[270] “Building a new enterprise AI services company with Blackstone, Hellman & Friedman, and Goldman Sachs”. Anthropic 官方公告，2026-05-04. <https://www.anthropic.com/news/enterprise-ai-services-company>，检索于 2026-10-09（上册第 2 章；经只读代理取得正文，引语逐字核对）
+
+[271] Francessca Vasquez, “AWS invests $1 billion in forward deployed AI engineers”. About Amazon 官方新闻，2026-06-30. <https://www.aboutamazon.com/news/aws/aws-1-billion-forward-deployed-ai-engineers>，检索于 2026-10-09（上册第 2、4、9、15、16 章；经只读代理取得正文，引语逐字核对；金额与“数千名”为公司规划口径）
+
+[272] Karthik Sonti, Erik Farr, Chandra Pinapala, “Introducing Forward Deployed Engineering for Partners: Winning the Future of Enterprise AI”. AWS APN 官方博客，2026-06-30. <https://aws.amazon.com/blogs/apn/introducing-forward-deployed-engineering-for-partners-winning-the-future-of-enterprise-ai/>，检索于 2026-10-09（上册第 4、9 章；引语逐字核对）
+
+[273] Karthik Sonti, Priya Bains, Erik Farr, “New FDE Pathways For AWS Partners: Get Ready for Production Agentic AI Delivery”. AWS APN 官方博客，2026-10-01. <https://aws.amazon.com/blogs/apn/new-fde-pathways-for-aws-partners-get-ready-for-production-agentic-ai-delivery/>，检索于 2026-10-09（上册第 2 章、下册导读；引语逐字核对）
+
+[274] Jordan Novet, “Microsoft commits $2.5 billion and 6,000 employees to new AI implementation unit”. CNBC，2026-07-02. <https://www.cnbc.com/2026/07/02/microsoft-commits-2point5-billion-6000-employees-ai-implementation-unit.html>，检索于 2026-10-09（上册第 2 章；媒体报道，微软官方博文未抓取核对）
+
+[275] “Anthropic invests $100 million to train 10,000 engineers and tackle the enterprise AI talent gap”. Anthropic 官方公告，2026-10-02. <https://www.anthropic.com/news/claude-frontier-academy>；项目页 <https://claude.com/programs/frontier-academy>，检索于 2026-10-09（上册第 2、9 章；两页经只读代理取得正文，引语逐字核对；1 万名为 2027 年底的培养目标）
+
+[276] “Gartner Predicts 70% of Enterprises Will Abandon Agentic AI Built by Vendor Forward-Deployed Engineering by 2028”. Gartner 新闻稿，2026-09-29. <https://www.gartner.com/en/newsroom/press-releases/2026-09-29-gartner-predicts-70-percent-of-enterprises-will-abandon-agentic-ai-built-by-vendor-forward-deployed-engineering-by-2028>，检索于 2026-10-09（上册第 2、9、15、16 章；抓取受限，gartner.com 返回 403，正文取自通稿全文转载，经 The Register 2026-09-30 报道交叉确认；分析机构预测，不是统计）
+
+[277] 《北京市发展和改革委员会等单位关于印发北京市加快智能体引领发展若干措施的通知》（京发改〔2026〕1185 号）. 首都之窗. <https://www.beijing.gov.cn/zhengce/zhengcefagui/202607/t20260723_4781085.html>，检索于 2026-10-09（上册第 2 章；官方原文已抓取，引文逐字核对）
+
+[278] 《工业和信息化部办公厅关于开展人工智能应用服务商培育专项行动的通知》（工信厅科函〔2026〕414 号）及政策解读. 安全内参转载 <https://www.secrss.com/articles/93545>，检索于 2026-10-09（上册第 2 章；工信部官网未直接抓取，转载全文与新华网、人民网 2026-08-31 报道交叉确认）
+
+[279] Eric Provencher, “Rethinking skills and prompts for GPT-6 Astra”. OpenAI 开发者博客，2026-09-11. <https://developers.openai.com/blog/rethinking-skills-and-prompts-for-gpt-6-astra>，检索于 2026-10-09（下册第 7 章；经只读代理取得正文，引语逐字核对；截断行为只对 Codex 成立）
+
 ---
 
 ## D.7 如何使用本附录
